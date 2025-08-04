@@ -1,0 +1,29 @@
+{
+  "983517327": {
+    "name": "KUN11-3BAEA4",
+    "surname": "KUN11-3BAEA4",
+    "age": "18",
+    "weight": 45,
+    "day": 11,
+    "paid_days": []
+  },
+  "7649621700": {
+    "name": "Fazliddin",
+    "surname": "Akramov",
+    "age": "16",
+    "weight": 56,
+    "day": 11
+  },
+  "6843191058": {
+    "name": "Bovur",
+    "surname": "Nemat9v",
+    "age": "34",
+    "weight": 110,
+    "day": 40,
+    "paid_days": [
+      11,
+      21,
+      31
+    ]
+  }
+}
