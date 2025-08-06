@@ -1,9 +1,9 @@
 from aiogram import BaseMiddleware
 from aiogram.types import Message
-from datetime import datetime, time
+from datetime import datetime, timedelta, time
 from typing import Callable, Awaitable, Dict, Any
 
-# Ruxsat berilgan vaqtlar
+# Ruxsat berilgan vaqtlar (O'zbekiston vaqti bilan)
 ALLOWED_START = time(6, 30)   # 06:30
 ALLOWED_END = time(22, 30)    # 22:30
 
@@ -14,6 +14,7 @@ class TimeLimiterMiddleware(BaseMiddleware):
         event: Message,
         data: Dict[str, Any]
     ) -> Any:
+        # UTC dan O'zbekiston vaqti (UTC+5) ga o'tkazamiz
         now = (datetime.utcnow() + timedelta(hours=5)).time()
 
         if not (ALLOWED_START <= now <= ALLOWED_END):
