@@ -14,7 +14,7 @@ class TimeLimiterMiddleware(BaseMiddleware):
         event: Message,
         data: Dict[str, Any]
     ) -> Any:
-        now = datetime.now().time()
+        now = (datetime.utcnow() + timedelta(hours=5)).time()
 
         if not (ALLOWED_START <= now <= ALLOWED_END):
             await event.answer("⛔️ Bot faqat 06:30 dan 22:30 gacha ishlaydi.\nIltimos, shu vaqt oralig‘ida qayta urinib ko‘ring.")
