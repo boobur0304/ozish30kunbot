@@ -15,15 +15,13 @@
     "day": 11
   },
   "6843191058": {
-    "name": "Bovur",
-    "surname": "Nemat9v",
+    "name": "B",
+    "surname": "N",
     "age": "34",
-    "weight": 110,
-    "day": 40,
+    "weight": 78,
+    "day": 21,
     "paid_days": [
-      11,
-      21,
-      31
+      11
     ]
   }
 }

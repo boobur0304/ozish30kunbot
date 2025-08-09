@@ -1,17 +1,24 @@
-# Python cache
+# Python
 __pycache__/
-*.py[cod]
+*.pyc
 *.pyo
 *.pyd
 
 # Virtual environment
 venv/
+ENV/
 env/
 
-# VSCode yoki PyCharm sozlamalari
+# Environment variables
+.env
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# IDE / Editor
 .vscode/
 .idea/
-
-# Botda ishlatiladigan maxfiy fayllar
-.env
-database/

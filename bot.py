@@ -15,7 +15,10 @@ from aiogram import Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import Message, CallbackQuery
 
-API_TOKEN = '8496876287:AAF2E83CcEYNj8tEu8Q0-i1RwMRGZwH4fmk'
+from dotenv import load_dotenv
+load_dotenv()
+
+API_TOKEN = os.getenv("BOT_TOKEN")  # <-- bu joyda token keladi
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -26,7 +29,7 @@ dp.include_router(router)
 USERS_PATH = "database/users.json"
 TOKENS_PATH = "database/tokens.json"
 ADMIN_ID = 983517327
-RESULT_CHANNEL_LINK = "https://t.me/+noC7Hn_AOBE0NGY6"
+RESULT_CHANNEL_LINK = "https://t.me/ozishchatbot"
 
 os.makedirs("database", exist_ok=True)
 if not os.path.exists(TOKENS_PATH):
@@ -72,22 +75,22 @@ def read_day_file(weight, day):
 def get_payment_text(weight, day):
     if weight < 100:
         if 11 <= day <= 20:
-            amount = "19,000 so‘m"
-        elif 21 <= day <= 30:
             amount = "29,000 so‘m"
+        elif 21 <= day <= 30:
+            amount = "39,000 so‘m"
         else:
             return ""
     else:
         if 11 <= day <= 20:
-            amount = "29,000 so‘m"
-        elif 21 <= day <= 30:
             amount = "39,000 so‘m"
-        elif 31 <= day <= 40:
+        elif 21 <= day <= 30:
             amount = "49,000 so‘m"
+        elif 31 <= day <= 40:
+            amount = "59,000 so‘m"
         else:
             return ""
 
-    return (f"⛔ Bu kun pullik.\n\n"
+    return (f"⛔ Keyingi kunlar uchun to'lov qilishingiz kerak.\n\n"
             f"To‘lov narxi: {amount}\n"
             f"💳 Karta: 9860350110461737\n"
             f"👤 Karta egasi: B.Nematov\n"
@@ -118,8 +121,8 @@ async def start_handler(message: Message, state: FSMContext):
         "<b>♻️ Qoidalar:</b>\n"
         "- Har kuni faqat navbatdagi kun ochiladi.\n"
         "- Hech qanday buyruqsiz, faqat tugmalar orqali ishlaydi.\n\n"
-        "🔥 <b>Natijalar:</b>\n"
-        f"<a href='{RESULT_CHANNEL_LINK}'>👉 Natijalar kanalini ko‘rish</a>\n"
+        "🔥 <b>Sizni kutyotgan natijalar:</b>\n"
+        f"<a href='{RESULT_CHANNEL_LINK}'>👉 Dietologga murojat</a>\n"
         "- 30 kunda -6 kg\n"
         "- 40 kunda -9 kg\n\n"
         "Boshlaymiz!👇\n\n"
@@ -288,7 +291,7 @@ async def admin_menu(message: Message):
         return
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Foydalanuvchilar haqida", callback_data="stats")],
-        [InlineKeyboardButton(text="📎 Natijalar kanali", url=RESULT_CHANNEL_LINK)]
+        [InlineKeyboardButton(text="📎  Savollarga javob berish", url=RESULT_CHANNEL_LINK)]
     ])
     await message.answer("🔧 Admin menyusi:", reply_markup=keyboard)
 
