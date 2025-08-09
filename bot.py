@@ -31,7 +31,7 @@ dp.include_router(router)
 USERS_PATH = "database/users.json"
 TOKENS_PATH = "database/tokens.json"
 ADMIN_ID = 983517327
-RESULT_CHANNEL_LINK = "https://t.me/+noC7Hn_AOBE0NGY6"
+RESULT_CHANNEL_LINK = "https://t.me/ozishchatbot"
 
 os.makedirs("database", exist_ok=True)
 if not os.path.exists(TOKENS_PATH):
@@ -77,22 +77,22 @@ def read_day_file(weight, day):
 def get_payment_text(weight, day):
     if weight < 100:
         if 11 <= day <= 20:
-            amount = "19,000 so‘m"
-        elif 21 <= day <= 30:
             amount = "29,000 so‘m"
+        elif 21 <= day <= 30:
+            amount = "39,000 so‘m"
         else:
             return ""
     else:
         if 11 <= day <= 20:
-            amount = "29,000 so‘m"
-        elif 21 <= day <= 30:
             amount = "39,000 so‘m"
-        elif 31 <= day <= 40:
+        elif 21 <= day <= 30:
             amount = "49,000 so‘m"
+        elif 31 <= day <= 40:
+            amount = "59,000 so‘m"
         else:
             return ""
 
-    return (f"⛔ Bu kun pullik.\n\n"
+    return (f"⛔ qolgan kunlar uchun to'lov qiling.\n\n"
             f"To‘lov narxi: {amount}\n"
             f"💳 Karta: 9860350110461737\n"
             f"👤 Karta egasi: B.Nematov\n"
