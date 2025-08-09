@@ -3,7 +3,6 @@ import json
 import os
 import uuid
 import asyncio
-from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -15,23 +14,19 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram import Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import Message, CallbackQuery
-from middlewares.time_limiter import TimeLimiterMiddleware
 
-load_dotenv()  # ✅ .env faylni yuklaymiz
-API_TOKEN = os.getenv("API_TOKEN")
+API_TOKEN = '8496876287:AAF2E83CcEYNj8tEu8Q0-i1RwMRGZwH4fmk'
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher(storage=MemoryStorage())
-dp.message.middleware(TimeLimiterMiddleware())
-
 router = Router()
 dp.include_router(router)
 
 USERS_PATH = "database/users.json"
 TOKENS_PATH = "database/tokens.json"
 ADMIN_ID = 983517327
-RESULT_CHANNEL_LINK = "https://t.me/ozishchatbot"
+RESULT_CHANNEL_LINK = "https://t.me/+noC7Hn_AOBE0NGY6"
 
 os.makedirs("database", exist_ok=True)
 if not os.path.exists(TOKENS_PATH):
@@ -77,22 +72,22 @@ def read_day_file(weight, day):
 def get_payment_text(weight, day):
     if weight < 100:
         if 11 <= day <= 20:
-            amount = "29,000 so‘m"
+            amount = "19,000 so‘m"
         elif 21 <= day <= 30:
-            amount = "39,000 so‘m"
+            amount = "29,000 so‘m"
         else:
             return ""
     else:
         if 11 <= day <= 20:
-            amount = "39,000 so‘m"
+            amount = "29,000 so‘m"
         elif 21 <= day <= 30:
-            amount = "49,000 so‘m"
+            amount = "39,000 so‘m"
         elif 31 <= day <= 40:
-            amount = "59,000 so‘m"
+            amount = "49,000 so‘m"
         else:
             return ""
 
-    return (f"⛔ qolgan kunlar uchun to'lov qiling.\n\n"
+    return (f"⛔ Bu kun pullik.\n\n"
             f"To‘lov narxi: {amount}\n"
             f"💳 Karta: 9860350110461737\n"
             f"👤 Karta egasi: B.Nematov\n"
@@ -127,7 +122,7 @@ async def start_handler(message: Message, state: FSMContext):
         f"<a href='{RESULT_CHANNEL_LINK}'>👉 Natijalar kanalini ko‘rish</a>\n"
         "- 30 kunda -6 kg\n"
         "- 40 kunda -9 kg\n\n"
-        "Boshlaymiz!\n\n"
+        "Boshlaymiz!👇\n\n"
         "Ismingizni kiriting:")
     await state.set_state(Form.name)
 
@@ -163,8 +158,7 @@ async def get_weight(message: Message, state: FSMContext):
         "paid_days": []
     }
     set_user_data(user_id, user_data)
-    await message.answer("✅ Ma'lumotlar saqlandi!\nQuyidan 1-kunni tanlang:",
-                         reply_markup=build_days_keyboard(weight, 1))
+    await message.answer("✅ Ma'lumotlar saqlandi!\nQuyidan 1-kunni tanlang:", reply_markup=build_days_keyboard(weight, 1))
     await state.clear()
 
 @router.callback_query(F.data.startswith("day_"))
