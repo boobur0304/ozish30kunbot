@@ -100,14 +100,17 @@ def get_payment_text(weight, day):
 def build_days_keyboard(weight, current_day):
     total_days = 40 if weight >= 100 else 30
     builder = InlineKeyboardBuilder()
+    
     for day in range(1, total_days + 1):
         if day == current_day:
-            builder.button(text=f"✅ Kun {day}", callback_data=f"day_{day}")
+            # Hozirgi kun — yashil yurak
+            builder.button(text=f"💚 Kun {day}", callback_data=f"day_{day}")
         elif day < current_day:
             builder.button(text=f"✅ Kun {day}", callback_data="old_day")
         else:
             builder.button(text=f"🔒 Kun {day}", callback_data="locked")
-    builder.adjust(5)
+    
+    builder.adjust(4)  # Har qatorda 4 ta tugma
     return builder.as_markup()
 
 @router.message(CommandStart())
