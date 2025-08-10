@@ -18,7 +18,7 @@ from aiogram.types import Message, CallbackQuery
 from dotenv import load_dotenv
 load_dotenv()
 
-API_TOKEN = os.getenv("BOT_TOKEN")  # <-- bu joyda token keladi
+API_TOKEN = os.getenv("BOT_TOKEN")
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -73,22 +73,12 @@ def read_day_file(weight, day):
     return "❌ Ushbu kun uchun ma'lumot topilmadi."
 
 def get_payment_text(weight, day):
-    if weight < 100:
-        if 11 <= day <= 20:
-            amount = "29,000 so‘m"
-        elif 21 <= day <= 30:
-            amount = "39,000 so‘m"
-        else:
-            return ""
+    if day == 4:
+        amount = "99,000 so‘m"
+    elif day == 21:
+        amount = "99,000 so‘m"
     else:
-        if 11 <= day <= 20:
-            amount = "39,000 so‘m"
-        elif 21 <= day <= 30:
-            amount = "49,000 so‘m"
-        elif 31 <= day <= 40:
-            amount = "59,000 so‘m"
-        else:
-            return ""
+        return ""
 
     return (f"⛔ Keyingi kunlar uchun to'lov qilishingiz kerak.\n\n"
             f"To‘lov narxi: {amount}\n"
@@ -100,17 +90,14 @@ def get_payment_text(weight, day):
 def build_days_keyboard(weight, current_day):
     total_days = 40 if weight >= 100 else 30
     builder = InlineKeyboardBuilder()
-    
     for day in range(1, total_days + 1):
         if day == current_day:
-            # Hozirgi kun — yashil yurak
             builder.button(text=f"💚 Kun {day}", callback_data=f"day_{day}")
         elif day < current_day:
             builder.button(text=f"✅ Kun {day}", callback_data="old_day")
         else:
             builder.button(text=f"🔒 Kun {day}", callback_data="locked")
-    
-    builder.adjust(4)  # Har qatorda 4 ta tugma
+    builder.adjust(4)
     return builder.as_markup()
 
 @router.message(CommandStart())
@@ -119,7 +106,7 @@ async def start_handler(message: Message, state: FSMContext):
         "🎯 <b>Marafon haqida:</b>\n"
         "- Har kuni sizga menyu, mashqlar va motivatsiya beriladi.\n"
         "- Ozish bo‘yicha sinovdan o‘tgan 30–40 kunlik dastur.\n"
-        "- Natijaga erishish uchun to'liq 30 yoki 40 kunlik rejadagi kunlarni o'tishingiz kerak. 100 kg dan yengillar uchun 30 kun. 100 kgdan yuqorilar uchun 40 kun.\n"
+        "- Natijaga erishish uchun to'liq 30 yoki 40 kunlik rejadagi kunlarni o'tishingiz kerak.\n"
         "- Bot sizning vazningizga qarab avtomatik reja tuzadi.\n\n"
         "<b>♻️ Qoidalar:</b>\n"
         "- Har kuni faqat navbatdagi kun ochiladi.\n"
@@ -183,13 +170,10 @@ async def show_day(callback: CallbackQuery):
         await callback.answer("⛔ Bu kun hali ochilmagan!", show_alert=True)
         return
 
-    if day in range(11, 21) and 11 not in user.get("paid_days", []):
+    if day == 4 and 4 not in user.get("paid_days", []):
         await callback.message.edit_text(get_payment_text(weight, day), reply_markup=build_days_keyboard(weight, current_day))
         return
-    if day in range(21, 31) and 21 not in user.get("paid_days", []):
-        await callback.message.edit_text(get_payment_text(weight, day), reply_markup=build_days_keyboard(weight, current_day))
-        return
-    if day in range(31, 41) and 31 not in user.get("paid_days", []):
+    if day == 21 and 21 not in user.get("paid_days", []):
         await callback.message.edit_text(get_payment_text(weight, day), reply_markup=build_days_keyboard(weight, current_day))
         return
 
@@ -219,12 +203,10 @@ async def handle_payment_photo(message: Message):
         return
 
     day = user.get("day", 1)
-    if 11 <= day <= 20:
-        stage = 11
-    elif 21 <= day <= 30:
+    if day >= 4 and 4 not in user.get("paid_days", []):
+        stage = 4
+    elif day >= 21 and 21 not in user.get("paid_days", []):
         stage = 21
-    elif 31 <= day <= 40:
-        stage = 31
     else:
         await message.answer("⛔ Sizda to‘lov bosqichi yo‘q.")
         return
@@ -275,12 +257,10 @@ async def confirm_payment_token(message: Message):
         await message.answer("❗ Foydalanuvchi topilmadi.")
         return
 
-    if stage == 11 and user['day'] < 11:
-        user['day'] = 11
+    if stage == 4 and user['day'] < 4:
+        user['day'] = 4
     elif stage == 21 and user['day'] < 21:
         user['day'] = 21
-    elif stage == 31 and user['day'] < 31:
-        user['day'] = 31
 
     user.setdefault("paid_days", []).append(stage)
     set_user_data(user_id, user)
