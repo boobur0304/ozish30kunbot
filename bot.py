@@ -18,7 +18,7 @@ from aiogram.types import Message, CallbackQuery
 from dotenv import load_dotenv
 load_dotenv()
 
-API_TOKEN = os.getenv("BOT_TOKEN")
+API_TOKEN = os.getenv("BOT_TOKEN")  # <-- bu joyda token keladi
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -73,6 +73,7 @@ def read_day_file(weight, day):
     return "❌ Ushbu kun uchun ma'lumot topilmadi."
 
 def get_payment_text(weight, day):
+    # 4-kunga va 21-kunga summalar qo'shildi, qolgan joylar olib tashlandi
     if day == 4:
         amount = "99,000 so‘m"
     elif day == 21:
@@ -90,14 +91,17 @@ def get_payment_text(weight, day):
 def build_days_keyboard(weight, current_day):
     total_days = 40 if weight >= 100 else 30
     builder = InlineKeyboardBuilder()
+    
     for day in range(1, total_days + 1):
         if day == current_day:
+            # Hozirgi kun — yashil yurak
             builder.button(text=f"💚 Kun {day}", callback_data=f"day_{day}")
         elif day < current_day:
             builder.button(text=f"✅ Kun {day}", callback_data="old_day")
         else:
             builder.button(text=f"🔒 Kun {day}", callback_data="locked")
-    builder.adjust(4)
+    
+    builder.adjust(4)  # Har qatorda 4 ta tugma
     return builder.as_markup()
 
 @router.message(CommandStart())
@@ -106,15 +110,14 @@ async def start_handler(message: Message, state: FSMContext):
         "🎯 <b>Marafon haqida:</b>\n"
         "- Har kuni sizga menyu, mashqlar va motivatsiya beriladi.\n"
         "- Ozish bo‘yicha sinovdan o‘tgan 30–40 kunlik dastur.\n"
-        "- Natijaga erishish uchun to'liq 30 yoki 40 kunlik rejadagi kunlarni o'tishingiz kerak.\n"
-        "- Bot sizning vazningizga qarab avtomatik reja tuzadi.\n\n"
+        "- Natijaga erishish uchun to'liq 30 yoki 40 kunlik rejadagi kunlarni o'tishingiz kerak. 100 kg dan yengillar uchun 30 kun. 100 kgdan yuqorilar uchun 40 kun.\n\n"
         "<b>♻️ Qoidalar:</b>\n"
         "- Har kuni faqat navbatdagi kun ochiladi.\n"
         "- Hech qanday buyruqsiz, faqat tugmalar orqali ishlaydi.\n\n"
         "🔥 <b>Sizni kutyotgan natijalar:</b>\n"
         f"<a href='{RESULT_CHANNEL_LINK}'>👉 Dietologga murojat</a>\n"
-        "100 kg dan yengillar uchun - 30 kunda -16 kg\n"
-        "100 kgdan og'irlar uchun- 40 kunda -19 kg\n\n"
+        "- 30 kunda -16 kg\n"
+        "- 40 kunda -19 kg\n\n"
         "Boshlaymiz!👇\n\n"
         "Ismingizni kiriting:")
     await state.set_state(Form.name)
@@ -170,6 +173,7 @@ async def show_day(callback: CallbackQuery):
         await callback.answer("⛔ Bu kun hali ochilmagan!", show_alert=True)
         return
 
+    # To'lov kerak bo'lgan kunlar: 4 va 21 kunlar
     if day == 4 and 4 not in user.get("paid_days", []):
         await callback.message.edit_text(get_payment_text(weight, day), reply_markup=build_days_keyboard(weight, current_day))
         return
@@ -203,9 +207,10 @@ async def handle_payment_photo(message: Message):
         return
 
     day = user.get("day", 1)
-    if day >= 4 and 4 not in user.get("paid_days", []):
+    # Endi to'lov bosqichlari 4 va 21
+    if day == 4:
         stage = 4
-    elif day >= 21 and 21 not in user.get("paid_days", []):
+    elif day == 21:
         stage = 21
     else:
         await message.answer("⛔ Sizda to‘lov bosqichi yo‘q.")
