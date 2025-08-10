@@ -113,8 +113,8 @@ async def start_handler(message: Message, state: FSMContext):
         "- Hech qanday buyruqsiz, faqat tugmalar orqali ishlaydi.\n\n"
         "🔥 <b>Sizni kutyotgan natijalar:</b>\n"
         f"<a href='{RESULT_CHANNEL_LINK}'>👉 Dietologga murojat</a>\n"
-        "- 30 kunda -6 kg\n"
-        "- 40 kunda -9 kg\n\n"
+        "100 kg dan yengillar uchun - 30 kunda -16 kg\n"
+        "100 kgdan og'irlar uchun- 40 kunda -19 kg\n\n"
         "Boshlaymiz!👇\n\n"
         "Ismingizni kiriting:")
     await state.set_state(Form.name)
