@@ -145,7 +145,7 @@ async def get_age(message: Message, state: FSMContext):
     await message.answer("Vazningizni kiriting (kg):")
     await state.set_state(Form.weight)
 
-ADMIN_ID = 123456789  # o'zingning Telegram ID'ingni qo'yasan
+ADMIN_ID = 983517327  # o'zingning Telegram ID'ingni qo'yasan
 
 @router.message(Form.weight)
 async def get_weight(message: Message, state: FSMContext):
