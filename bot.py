@@ -177,10 +177,7 @@ async def get_weight(message: Message, state: FSMContext):
         f"🎂 Yosh: {user_data['age']} da\n"
         f"⚖️ Vazn: {user_data['weight']} kg"
     )
-    try:
-        await message.bot.send_message(ADMIN_ID, text)
-    except Exception as e:
-        print(f"Admin xabarini yuborishda xato: {e}")
+    await message.bot.send_message(ADMIN_ID, text)   # ❗ try/except ishlatmaslik yaxshi, xatoni ko‘rsatadi
 
     await message.answer("✅ Ma’lumotlaringiz qabul qilindi! Endi marafon menyusini olishni boshlaysiz.")
     await state.clear()
