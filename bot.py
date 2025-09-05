@@ -127,29 +127,62 @@ async def start_handler(message: Message, state: FSMContext):
 
     await state.set_state(Form.name)
 
+# 👤 Ismni olish
 @router.message(Form.name)
 async def get_name(message: Message, state: FSMContext):
+    if len(message.text) < 2:
+        await message.answer("⚠️ Ism juda qisqa. Iltimos, to‘liq ismingizni yozing.")
+        return
+
     await state.update_data(name=message.text)
     await message.answer("Familiyangizni kiriting:")
     await state.set_state(Form.surname)
 
+
+# 👤 Familiyani olish
 @router.message(Form.surname)
 async def get_surname(message: Message, state: FSMContext):
+    if len(message.text) < 2:
+        await message.answer("⚠️ Familiya juda qisqa. Iltimos, to‘liq familiyangizni yozing.")
+        return
+
     await state.update_data(surname=message.text)
-    await message.answer("Yoshingizni kiriting:")
+    await message.answer("Yoshingizni kiriting (faqat raqam, masalan: 25):")
     await state.set_state(Form.age)
 
+
+# 🎂 Yoshni olish
+@router.message(Form.age)
+async def get_age(message: Message, state: FSMContext):
+    if not message.text.isdigit():
+        await message.answer("⚠️ Yosh faqat raqam bo‘lishi kerak (masalan: 25).")
+        return
+
+    age = int(message.text)
+    if age < 10 or age > 100:
+        await message.answer("⚠️ Yosh 10 va 100 orasida bo‘lishi kerak.")
+        return
+
+    await state.update_data(age=age)
+    await message.answer("Vazningizni kiriting (kg, masalan: 78):")
+    await state.set_state(Form.weight)
+
+
+# ⚖️ Vaznni olish
 @router.message(Form.weight)
 async def get_weight(message: Message, state: FSMContext):
     user_id = message.from_user.id
     data = await state.get_data()
 
-    # Vaznni tekshirish
-    if not message.text.isdigit() or int(message.text) < 30 or int(message.text) > 300:
-        await message.answer("⚠️ Vazn noto‘g‘ri kiritildi. Iltimos, kilogrammda yozing (masalan: 78).")
+    if not message.text.isdigit():
+        await message.answer("⚠️ Vazn faqat raqam bo‘lishi kerak (masalan: 78).")
         return
 
     weight = int(message.text)
+    if weight < 30 or weight > 300:
+        await message.answer("⚠️ Vazn 30 dan 300 kg orasida bo‘lishi kerak.")
+        return
+
     user_data = {
         "name": data['name'],
         "surname": data['surname'],
@@ -159,11 +192,11 @@ async def get_weight(message: Message, state: FSMContext):
         "paid_days": []
     }
 
-    set_user_data(user_id, user_data)  # ✅ shu joyni to‘g‘riladim
+    set_user_data(user_id, user_data)
 
-    # ✅ Admin’ga xabar yuborish
+    # Admin’ga xabar
     text = (
-        f"🆕 Sizda yangi foydalanuvchi!\n\n"
+        f"🆕 Yangi foydalanuvchi!\n\n"
         f"👤 Ism: {user_data['name']}\n"
         f"👤 Familiya: {user_data['surname']}\n"
         f"🎂 Yosh: {user_data['age']} da\n"
