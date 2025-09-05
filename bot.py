@@ -145,10 +145,18 @@ async def get_age(message: Message, state: FSMContext):
     await message.answer("Vazningizni kiriting (kg):")
     await state.set_state(Form.weight)
 
+ADMIN_ID = 123456789  # o'zingning Telegram ID'ingni qo'yasan
+
 @router.message(Form.weight)
 async def get_weight(message: Message, state: FSMContext):
     user_id = message.from_user.id
     data = await state.get_data()
+
+    # Vaznni tekshirish
+    if not message.text.isdigit() or int(message.text) < 30 or int(message.text) > 300:
+        await message.answer("⚠️ Vazn noto‘g‘ri kiritildi. Iltimos, kilogrammda yozing (masalan: 78).")
+        return
+
     weight = int(message.text)
     user_data = {
         "name": data['name'],
@@ -158,9 +166,25 @@ async def get_weight(message: Message, state: FSMContext):
         "day": 1,
         "paid_days": []
     }
-    set_user_data(user_id, user_data)
-    await message.answer("✅ Ma'lumotlar saqlandi!\nQuyidan 1-kunni tanlang:", reply_markup=build_days_keyboard(weight, 1))
+
+    save_user_data(user_id, user_data)
+
+    # ✅ Admin’ga xabar yuborish
+    text = (
+        f"🆕 Sizda yangi foydalanuvchi!\n\n"
+        f"👤 Ism: {user_data['name']}\n"
+        f"👤 Familiya: {user_data['surname']}\n"
+        f"🎂 Yosh: {user_data['age']} da\n"
+        f"⚖️ Vazn: {user_data['weight']} kg"
+    )
+    try:
+        await message.bot.send_message(ADMIN_ID, text)
+    except Exception as e:
+        print(f"Admin xabarini yuborishda xato: {e}")
+
+    await message.answer("✅ Ma’lumotlaringiz qabul qilindi! Endi marafon menyusini olishni boshlaysiz.")
     await state.clear()
+
 
 @router.callback_query(F.data.startswith("day_"))
 async def show_day(callback: CallbackQuery):
