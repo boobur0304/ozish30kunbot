@@ -73,53 +73,58 @@ def read_day_file(weight, day):
     return "❌ Ushbu kun uchun ma'lumot topilmadi."
 
 def get_payment_text(weight, day):
-    # 4-kunga va 21-kunga summalar qo'shildi, qolgan joylar olib tashlandi
-    if day == 4:
-        amount = "99,000 so‘m"
-    elif day == 21:
-        amount = "99,000 so‘m"
-    else:
-        return ""
+    if day == 4 or day == 21:  # agar 1-kundan to‘lov bo‘lsin desang, shartni 1 qilasan
+        return (
+            "🎉 Siz 3 kunlik <b>bepul dasturdan</b> muvaffaqiyatli o‘tdingiz!\n\n"
+            "👉 Endi <b>premium bosqichni</b> davom ettirish uchun to‘lov qilishingiz kerak.\n\n"
+            "✅ Natijada:\n"
+            "▫️ 30 kunda <b>-16 kg</b>\n"
+            "▫️ 40 kunda <b>-19 kg</b>\n\n"
+            "💳 <b>To‘lov narxi:</b> <s>199,000 so‘m</s> ➝ <b>145,000 so‘m</b>\n"
+            "(kuniga ~4,800 so‘m, ya’ni bir choy narxi)\n\n"
+            "💳 Karta raqami: <code>9860 3501 1046 1737</code>\n"
+            "👤 Karta egasi: <b>B.Nematov</b>\n\n"
+            "📸 <b>To‘lov chekini shu botga yuboring.</b>\n"
+            "⏱ <i>10 daqiqa ichida admin tasdiqlaydi</i> va keyingi kuningiz ochiladi!\n\n"
+            "⚡️ <b>Eslatma:</b> Agar bugun to‘lamasangiz, dastur <u>to‘xtab qoladi</u> "
+            "va natija <u>kechikadi</u>."
+        )
+    return ""
 
-    return (f"⛔ Keyingi kunlar uchun to'lov qilishingiz kerak.\n\n"
-            f"To‘lov narxi: {amount}\n"
-            f"💳 Karta: 9860350110461737\n"
-            f"👤 Karta egasi: B.Nematov\n"
-            f"✅ Chekni shu botga yuboring.\n"
-            f"🕓 Tez orada to‘lovingiz tasdiqlanadi.")
 
 def build_days_keyboard(weight, current_day):
     total_days = 40 if weight >= 100 else 30
     builder = InlineKeyboardBuilder()
-    
+
     for day in range(1, total_days + 1):
         if day == current_day:
-            # Hozirgi kun — yashil yurak
+            # Hozirgi kun — shu kunga bog‘langan tugma
             builder.button(text=f"💚 Kun {day}", callback_data=f"day_{day}")
         elif day < current_day:
-            builder.button(text=f"✅ Kun {day}", callback_data="old_day")
+            # Eski kunlar ham qayta ochiladi
+            builder.button(text=f"✅ Kun {day}", callback_data=f"day_{day}")
         else:
+            # Keyingi kunlar — yopiq
             builder.button(text=f"🔒 Kun {day}", callback_data="locked")
-    
-    builder.adjust(4)  # Har qatorda 4 ta tugma
+
+    builder.adjust(4)
     return builder.as_markup()
+
 
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext):
     await message.answer(
-        "🎯 <b>Marafon haqida:</b>\n"
-        "- Har kuni sizga menyu, mashqlar va motivatsiya beriladi.\n"
-        "- Ozish bo‘yicha sinovdan o‘tgan 30–40 kunlik dastur.\n"
-        "- Natijaga erishish uchun to'liq 30 yoki 40 kunlik rejadagi kunlarni o'tishingiz kerak. 100 kg dan yengillar uchun 30 kun. 100 kgdan yuqorilar uchun 40 kun.\n\n"
-        "<b>♻️ Qoidalar:</b>\n"
-        "- Har kuni faqat navbatdagi kun ochiladi.\n"
-        "- Hech qanday buyruqsiz, faqat tugmalar orqali ishlaydi.\n\n"
-        "🔥 <b>Sizni kutyotgan natijalar:</b>\n"
-        f"<a href='{RESULT_CHANNEL_LINK}'>👉 Dietologga murojat</a>\n"
-        "- 30 kunda -16 kg\n"
-        "- 40 kunda -19 kg\n\n"
-        "Boshlaymiz!👇\n\n"
-        "Ismingizni kiriting:")
+    "🎯 <b>Marafon haqida:</b>\n"
+    "- Bu shunchaki bot emas, bu — dietolog va trenerlar tayyorlagan maxsus dastur.\n"
+    "- Sizga 30 kunlik individual menyu, mashqlar va motivatsiya beriladi.\n"
+    "- Natijada: 30 kunda -16 kg, 40 kunda -19 kg.\n\n"
+    "✅ <b>Birinchi 3 kun — mutlaqo bepul!</b>\n"
+    "4-kundan boshlab premium ishtirokchilar davom ettirishlari mumkin.\n\n"
+    "Dietolog huzuriga 1 soat borish 100 ming so‘m. "
+    "Biz esa butun oyni — atigi <b>145 ming so‘m</b>ga taqdim qilamiz!\n\n"
+    "Ismingizni kiriting:"
+)
+
     await state.set_state(Form.name)
 
 @router.message(Form.name)
@@ -192,9 +197,6 @@ async def show_day(callback: CallbackQuery):
 async def locked_day(callback: CallbackQuery):
     await callback.answer("⛔ Bu kun hali ochilmagan!", show_alert=True)
 
-@router.callback_query(F.data == "old_day")
-async def old_day(callback: CallbackQuery):
-    await callback.answer("✅ Bu kun allaqachon ochilgan!", show_alert=True)
 
 @router.message(F.photo)
 async def handle_payment_photo(message: Message):
