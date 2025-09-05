@@ -139,14 +139,6 @@ async def get_surname(message: Message, state: FSMContext):
     await message.answer("Yoshingizni kiriting:")
     await state.set_state(Form.age)
 
-@router.message(Form.age)
-async def get_age(message: Message, state: FSMContext):
-    await state.update_data(age=message.text)
-    await message.answer("Vazningizni kiriting (kg):")
-    await state.set_state(Form.weight)
-
-ADMIN_ID = 983517327  # o'zingning Telegram ID'ingni qo'yasan
-
 @router.message(Form.weight)
 async def get_weight(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -167,7 +159,7 @@ async def get_weight(message: Message, state: FSMContext):
         "paid_days": []
     }
 
-    save_user_data(user_id, user_data)
+    set_user_data(user_id, user_data)  # ✅ shu joyni to‘g‘riladim
 
     # ✅ Admin’ga xabar yuborish
     text = (
@@ -177,7 +169,7 @@ async def get_weight(message: Message, state: FSMContext):
         f"🎂 Yosh: {user_data['age']} da\n"
         f"⚖️ Vazn: {user_data['weight']} kg"
     )
-    await message.bot.send_message(ADMIN_ID, text)   # ❗ try/except ishlatmaslik yaxshi, xatoni ko‘rsatadi
+    await message.bot.send_message(ADMIN_ID, text)
 
     await message.answer("✅ Ma’lumotlaringiz qabul qilindi! Endi marafon menyusini olishni boshlaysiz.")
     await state.clear()
