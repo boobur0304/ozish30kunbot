@@ -188,7 +188,7 @@ async def get_weight(message: Message, state: FSMContext):
         "surname": data['surname'],
         "age": data['age'],
         "weight": weight,
-        "day": 1,
+        "day": 1,              # ✅ Foydalanuvchi 1-kunni bosganda ochiladi
         "paid_days": []
     }
 
@@ -204,16 +204,23 @@ async def get_weight(message: Message, state: FSMContext):
     )
     await message.bot.send_message(ADMIN_ID, text)
 
-    # ✅ Foydalanuvchiga tasdiq va 1-kun menyusi
-    await message.answer("✅ Ma’lumotlaringiz qabul qilindi! Endi marafon menyusini olishni boshlaysiz.")
-    day_text = read_day_file(weight, 1)
+    # ✅ Foydalanuvchiga tasdiq va 1-kun tugmasi
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="▶️ 1-kun", callback_data="day_1")]
+    ])
+
     await message.answer(
-        day_text,
-        reply_markup=build_days_keyboard(weight, 1)  # 1-kundan boshlanadi
-    )
+    "✅ Ma’lumotlaringiz qabul qilindi!\n\n"
+    "🎯 Endi siz o‘zingizni sog‘lom va eng yaxshi holatingizga olib boradigan yo‘lni boshladingiz!\n"
+    "Har bir kun sizni orzuyingizdagi natijaga yaqinlashtiradi.\n\n"
+    "🔥 Bu marafon faqat ovqatlanish emas — bu hayotingizni o‘zgartiradigan yo‘l!\n\n"
+    "⚡️ Esda tuting: dasturdan 3 kun bepul foydalanishingiz mumkin. Agar haqiqiy o‘zgarishni his qilsangiz, albatta davom etasiz.\n"
+    "👉 Siz bunga loyiqsiz!\n\n"
+    "▶️ Boshlash uchun pastdagi <b>1-kun</b> tugmasini bosing 👇",
+    reply_markup=keyboard
+)
 
     await state.clear()
-
 
 
 @router.callback_query(F.data.startswith("day_"))
