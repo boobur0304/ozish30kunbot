@@ -18,7 +18,7 @@ from aiogram.types import Message, CallbackQuery
 from dotenv import load_dotenv
 load_dotenv()
 
-API_TOKEN = os.getenv("BOT_TOKEN")  # <-- bu joyda token keladi
+API_TOKEN = os.getenv("BOT_TOKEN")  # <-- .env ga token qo'ying: BOT_TOKEN=...
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -29,7 +29,8 @@ dp.include_router(router)
 USERS_PATH = "database/users.json"
 TOKENS_PATH = "database/tokens.json"
 ADMIN_ID = 983517327
-RESULT_CHANNEL_LINK = "https://t.me/ozishchatbot"
+RESULT_CHANNEL_LINK = "https://t.me/ozishchatbot"  # agar kerak bo'lsa ishlating
+OZISH_BOT = "https://t.me/OzishChatBot"  # murojaat URL
 
 os.makedirs("database", exist_ok=True)
 if not os.path.exists(TOKENS_PATH):
@@ -45,12 +46,15 @@ class Form(StatesGroup):
 def load_users():
     if not os.path.exists(USERS_PATH):
         return {}
-    with open(USERS_PATH, 'r') as f:
-        return json.load(f)
+    with open(USERS_PATH, 'r', encoding='utf-8') as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return {}
 
 def save_users(users):
-    with open(USERS_PATH, 'w') as f:
-        json.dump(users, f, indent=2)
+    with open(USERS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(users, f, ensure_ascii=False, indent=2)
 
 def get_user_data(user_id):
     users = load_users()
@@ -73,7 +77,7 @@ def read_day_file(weight, day):
     return "❌ Ushbu kun uchun ma'lumot topilmadi."
 
 def get_payment_text(weight, day):
-    if day == 4 or day == 21:  # agar 1-kundan to‘lov bo‘lsin desang, shartni 1 qilasan
+    if day == 4 or day == 21:
         return (
             "🎉 Siz 3 kunlik <b>bepul dasturdan</b> muvaffaqiyatli o‘tdingiz!\n\n"
             "👉 Endi <b>premium bosqichni</b> davom ettirish uchun to‘lov qilishingiz kerak.\n\n"
@@ -91,84 +95,79 @@ def get_payment_text(weight, day):
         )
     return ""
 
-
 def build_days_keyboard(weight, current_day):
+    """
+    Barcha kun tugmalari chiqadi: ochilganlar ✅, hozirgi kun 💚, yopiq kunlar 🔒.
+    Oxirida doimiy "Murojaat qilish" tugmasi mavjud.
+    """
     total_days = 40 if weight >= 100 else 30
     builder = InlineKeyboardBuilder()
 
     for day in range(1, total_days + 1):
         if day == current_day:
-            # Hozirgi kun — shu kunga bog‘langan tugma
             builder.button(text=f"💚 Kun {day}", callback_data=f"day_{day}")
         elif day < current_day:
-            # Eski kunlar ham qayta ochiladi
             builder.button(text=f"✅ Kun {day}", callback_data=f"day_{day}")
         else:
-            # Keyingi kunlar — yopiq
             builder.button(text=f"🔒 Kun {day}", callback_data="locked")
 
     builder.adjust(4)
+
+    # Add constant "Murojaat qilish" button as a separate row
+    builder.row(
+        InlineKeyboardButton(text="💬 Murojaat qilish", url=OZISH_BOT)
+    )
+
     return builder.as_markup()
 
-
+# ----- START -----
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext):
     await message.answer(
-    "🎯 <b>Marafon haqida:</b>\n"
-    "- Bu shunchaki bot emas, bu — dietolog va trenerlar tayyorlagan maxsus dastur.\n"
-    "- Sizga 30 kunlik individual menyu, mashqlar va motivatsiya beriladi.\n"
-    "- Natijada: 30 kunda -16 kg, 40 kunda -19 kg.\n\n"
-    "✅ <b>Birinchi 3 kun — mutlaqo bepul!</b>\n"
-    "4-kundan boshlab premium ishtirokchilar davom ettirishlari mumkin.\n\n"
-    "Dietolog huzuriga 1 soat borish 100 ming so‘m. "
-    "Biz esa butun oyni — atigi <b>145 ming so‘m</b>ga taqdim qilamiz!\n\n"
-    "Ismingizni kiriting:"
-)
-
+        "🎯 <b>Marafon haqida:</b>\n"
+        "- Bu shunchaki bot emas, bu — dietolog va trenerlar tayyorlagan maxsus dastur.\n"
+        "- Sizga 30 kunlik individual menyu, mashqlar va motivatsiya beriladi.\n"
+        "- Natijada: 30 kunda -16 kg, 40 kunda -19 kg.\n\n"
+        "✅ <b>Birinchi 3 kun — mutlaqo bepul!</b>\n"
+        "4-kundan boshlab premium ishtirokchilar davom ettirishlari mumkin.\n\n"
+        "Dietolog huzuriga 1 soat borish 100 ming so‘m. "
+        "Biz esa butun oyni — atigi <b>145 ming so‘m</b>ga taqdim qilamiz!\n\n"
+        "Ismingizni kiriting:"
+    )
     await state.set_state(Form.name)
 
-# 👤 Ismni olish
+# ----- FORM: name, surname, age, weight -----
 @router.message(Form.name)
 async def get_name(message: Message, state: FSMContext):
-    if len(message.text) < 2:
+    if len(message.text.strip()) < 2:
         await message.answer("⚠️ Ism juda qisqa. Iltimos, to‘liq ismingizni yozing.")
         return
-
-    await state.update_data(name=message.text)
+    await state.update_data(name=message.text.strip())
     await message.answer("Familiyangizni kiriting:")
     await state.set_state(Form.surname)
 
-
-# 👤 Familiyani olish
 @router.message(Form.surname)
 async def get_surname(message: Message, state: FSMContext):
-    if len(message.text) < 2:
+    if len(message.text.strip()) < 2:
         await message.answer("⚠️ Familiya juda qisqa. Iltimos, to‘liq familiyangizni yozing.")
         return
-
-    await state.update_data(surname=message.text)
+    await state.update_data(surname=message.text.strip())
     await message.answer("Yoshingizni kiriting (faqat raqam, masalan: 25):")
     await state.set_state(Form.age)
 
-
-# 🎂 Yoshni olish
 @router.message(Form.age)
 async def get_age(message: Message, state: FSMContext):
     if not message.text.isdigit():
         await message.answer("⚠️ Yosh faqat raqam bo‘lishi kerak (masalan: 25).")
         return
-
     age = int(message.text)
     if age < 10 or age > 100:
         await message.answer("⚠️ Yosh 10 va 100 orasida bo‘lishi kerak.")
         return
-
     await state.update_data(age=age)
     await message.answer("Vazningizni kiriting (kg, masalan: 78):")
     await state.set_state(Form.weight)
 
-
-# ⚖️ Vaznni olish
 @router.message(Form.weight)
 async def get_weight(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -188,41 +187,39 @@ async def get_weight(message: Message, state: FSMContext):
         "surname": data['surname'],
         "age": data['age'],
         "weight": weight,
-        "day": 1,              # ✅ Foydalanuvchi 1-kunni bosganda ochiladi
+        "day": 1,              # 1-kunni bosgandan keyin ochiladi va keyingi day oshadi
         "paid_days": []
     }
 
     set_user_data(user_id, user_data)
 
     # Admin’ga xabar
-    text = (
+    admin_text = (
         f"🆕 Yangi foydalanuvchi!\n\n"
         f"👤 Ism: {user_data['name']}\n"
         f"👤 Familiya: {user_data['surname']}\n"
         f"🎂 Yosh: {user_data['age']} da\n"
         f"⚖️ Vazn: {user_data['weight']} kg"
     )
-    await message.bot.send_message(ADMIN_ID, text)
+    await message.bot.send_message(ADMIN_ID, admin_text)
 
-    # ✅ Foydalanuvchiga tasdiq va 1-kun tugmasi
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="▶️ 1-kun", callback_data="day_1")]
-    ])
+    # Barcha kun tugmalari (1-kun ochiq, qolganlari 🔒) + Murojaat qilish tugmasi
+    days_keyboard = build_days_keyboard(weight, 1)
 
     await message.answer(
-    "✅ Ma’lumotlaringiz qabul qilindi!\n\n"
-    "🎯 Endi siz o‘zingizni sog‘lom va eng yaxshi holatingizga olib boradigan yo‘lni boshladingiz!\n"
-    "Har bir kun sizni orzuyingizdagi natijaga yaqinlashtiradi.\n\n"
-    "🔥 Bu marafon faqat ovqatlanish emas — bu hayotingizni o‘zgartiradigan yo‘l!\n\n"
-    "⚡️ Esda tuting: dasturdan 3 kun bepul foydalanishingiz mumkin. Agar haqiqiy o‘zgarishni his qilsangiz, albatta davom etasiz.\n"
-    "👉 Siz bunga loyiqsiz!\n\n"
-    "▶️ Boshlash uchun pastdagi <b>1-kun</b> tugmasini bosing 👇",
-    reply_markup=keyboard
-)
+        "✅ Ma’lumotlaringiz qabul qilindi!\n\n"
+        "🎯 Endi siz o‘zingizni sog‘lom va eng yaxshi holatingizga olib boradigan yo‘lni boshladingiz!\n"
+        "Har bir kun sizni orzuyingizdagi natijaga yaqinlashtiradi.\n\n"
+        "🔥 Bu marafon faqat ovqatlanish emas — bu hayotingizni o‘zgartiradigan yo‘l!\n\n"
+        "⚡️ Esda tuting: dasturdan 3 kun bepul foydalanishingiz mumkin. Agar haqiqiy o‘zgarishni his qilsangiz, albatta davom etasiz.\n"
+        "👉 Siz bunga loyiqsiz!\n\n"
+        "▶️ Pastdan <b>1-kun</b> tugmasini bosing va boshlang 👇",
+        reply_markup=days_keyboard
+    )
 
     await state.clear()
 
-
+# ----- Kun tugmalarini ko'rsatish -----
 @router.callback_query(F.data.startswith("day_"))
 async def show_day(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -232,14 +229,14 @@ async def show_day(callback: CallbackQuery):
         return
 
     day = int(callback.data.split("_")[1])
-    weight = user["weight"]
-    current_day = user["day"]
+    weight = user.get("weight", 0)
+    current_day = user.get("day", 1)
 
     if day > current_day:
         await callback.answer("⛔ Bu kun hali ochilmagan!", show_alert=True)
         return
 
-    # To'lov kerak bo'lgan kunlar: 4 va 21 kunlar
+    # To'lov kerak bo'lgan kunlar: 4 va 21
     if day == 4 and 4 not in user.get("paid_days", []):
         await callback.message.edit_text(get_payment_text(weight, day), reply_markup=build_days_keyboard(weight, current_day))
         return
@@ -247,18 +244,26 @@ async def show_day(callback: CallbackQuery):
         await callback.message.edit_text(get_payment_text(weight, day), reply_markup=build_days_keyboard(weight, current_day))
         return
 
+    # Odatdagi kun matni
     text = read_day_file(weight, day)
-    if day == current_day and day < (40 if weight >= 100 else 30):
-        user["day"] += 1
+
+    # Savollar uchun eslatma oxirida
+    text += "\n\n❓ Savollar bo‘lsa dietologga murojaat qiling 👇"
+
+    # Agar foydalanuvchi hozirgi kunga bosgan bo'lsa, keyingi kunni ochamiz
+    total_days = 40 if weight >= 100 else 30
+    if day == current_day and current_day < total_days:
+        user["day"] = current_day + 1
         set_user_data(user_id, user)
 
     await callback.message.edit_text(text, reply_markup=build_days_keyboard(weight, user["day"]))
 
+# ----- Locked tugma -----
 @router.callback_query(F.data == "locked")
 async def locked_day(callback: CallbackQuery):
     await callback.answer("⛔ Bu kun hali ochilmagan!", show_alert=True)
 
-
+# ----- Chek yuborish (foydalanuvchi adminga chek yuboradi) -----
 @router.message(F.photo)
 async def handle_payment_photo(message: Message):
     user_id = message.from_user.id
@@ -270,21 +275,24 @@ async def handle_payment_photo(message: Message):
         return
 
     day = user.get("day", 1)
-    # Endi to'lov bosqichlari 4 va 21
+    # To'lov bosqichlari: foydalanuvchi ayni paytda 4 yoki 21 kunda bo'lishi kerak
     if day == 4:
         stage = 4
     elif day == 21:
         stage = 21
     else:
-        await message.answer("⛔ Sizda to‘lov bosqichi yo‘q.")
+        await message.answer("⛔ Sizda hozir to‘lov bosqichi yo‘q.")
         return
 
     token = f"KUN{stage}-{uuid.uuid4().hex[:6]}"
-    with open(TOKENS_PATH, 'r+') as f:
-        data = json.load(f)
+    with open(TOKENS_PATH, 'r+', encoding='utf-8') as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError:
+            data = {}
         data[token] = {"user_id": user_id, "stage": stage}
         f.seek(0)
-        json.dump(data, f, indent=2)
+        json.dump(data, f, ensure_ascii=False, indent=2)
         f.truncate()
 
     await bot.send_photo(
@@ -300,16 +308,21 @@ async def handle_payment_photo(message: Message):
     )
     await message.answer("✅ Chekingiz yuborildi. Admin ko‘rib chiqadi.")
 
+# ----- Admin token orqali tasdiqlash -----
 @router.message(F.text.startswith("KUN"))
 async def confirm_payment_token(message: Message):
     if message.from_user.id != ADMIN_ID:
         return
     token = message.text.strip()
     if not os.path.exists(TOKENS_PATH):
+        await message.answer("❌ Tokenlar fayli topilmadi.")
         return
 
-    with open(TOKENS_PATH, 'r+') as f:
-        tokens = json.load(f)
+    with open(TOKENS_PATH, 'r+', encoding='utf-8') as f:
+        try:
+            tokens = json.load(f)
+        except json.JSONDecodeError:
+            tokens = {}
         if token not in tokens:
             await message.answer("❌ Noto‘g‘ri yoki eskirgan token.")
             return
@@ -317,7 +330,7 @@ async def confirm_payment_token(message: Message):
         stage = tokens[token]['stage']
         del tokens[token]
         f.seek(0)
-        json.dump(tokens, f, indent=2)
+        json.dump(tokens, f, ensure_ascii=False, indent=2)
         f.truncate()
 
     user = get_user_data(user_id)
@@ -325,9 +338,10 @@ async def confirm_payment_token(message: Message):
         await message.answer("❗ Foydalanuvchi topilmadi.")
         return
 
-    if stage == 4 and user['day'] < 4:
+    # Foydalanuvchining day ni kerakli bosqichga olib chiqamiz
+    if stage == 4 and user.get('day', 1) < 4:
         user['day'] = 4
-    elif stage == 21 and user['day'] < 21:
+    elif stage == 21 and user.get('day', 1) < 21:
         user['day'] = 21
 
     user.setdefault("paid_days", []).append(stage)
@@ -336,6 +350,7 @@ async def confirm_payment_token(message: Message):
     await bot.send_message(chat_id=user_id, text=f"✅ To‘lov tasdiqlandi! {stage}-kun ochildi.")
     await message.answer(f"☑️ {user['name']} uchun {stage}-kun ochildi.")
 
+# ----- Admin menyu -----
 @router.message(Command("admin"))
 async def admin_menu(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -364,5 +379,6 @@ async def show_stats(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
+# ----- Ishga tushurish -----
 if __name__ == "__main__":
     asyncio.run(dp.start_polling(bot))
