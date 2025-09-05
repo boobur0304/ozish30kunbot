@@ -204,8 +204,16 @@ async def get_weight(message: Message, state: FSMContext):
     )
     await message.bot.send_message(ADMIN_ID, text)
 
+    # ✅ Foydalanuvchiga tasdiq va 1-kun menyusi
     await message.answer("✅ Ma’lumotlaringiz qabul qilindi! Endi marafon menyusini olishni boshlaysiz.")
+    day_text = read_day_file(weight, 1)
+    await message.answer(
+        day_text,
+        reply_markup=build_days_keyboard(weight, 1)  # 1-kundan boshlanadi
+    )
+
     await state.clear()
+
 
 
 @router.callback_query(F.data.startswith("day_"))
