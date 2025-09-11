@@ -157,7 +157,6 @@ def read_day_file(weight, day):
     return "❌ Ushbu kun uchun ma'lumot topilmadi."
 
 def get_payment_text(weight, day):
-    # only 4-kun requires payment in this design
     if day == 4:
         return (
             "🎉 Siz 3 kunlik <b>bepul dasturdan</b> muvaffaqiyatli o‘tdingiz!\n\n"
@@ -167,8 +166,7 @@ def get_payment_text(weight, day):
             "▫️ 40 kunda <b>-19 kg</b>\n\n"
             f"💳 <b>To‘lov narxi:</b> <s>199,000 so‘m</s> ➝ <b>145,000 so‘m</b>\n"
             "(kuniga ~4,800 so‘m, ya’ni bir choy narxi)\n\n"
-            "🎁 <b>Promokod olish uchun yuqoridagi Instagram tugmasiga o'ting.</b>\n\n"
-            f"💳 Karta raqami: <code>{mask_card(CARD_NUMBER)}</code>\n"
+            f"💳 Karta raqami: <code>{CARD_NUMBER}</code>\n"
             "👤 Karta egasi: <b>B.Nematov</b>\n\n"
             "📸 <b>To‘lov chekini shu botga yuboring.</b>\n"
             "⏱ <i>10 daqiqa ichida admin tasdiqlaydi</i> va keyingi kuningiz ochiladi!\n\n"
@@ -177,45 +175,47 @@ def get_payment_text(weight, day):
         )
     return ""
 
+
 def build_days_keyboard(weight, current_day, extra_buttons: list = None):
     """
-    Instagram tugmasi yuqorida, u butun satrni egallaydi (to'liq kenglikda).
-    Keyin kun tugmalari, qo'shimcha tugmalar va oxirida murojaat tugmasi.
+    Instagram tugmasi yuqorida (sala keng), keyin kun tugmalari 4 tadan guruhlangan,
+    keyin extra_buttons (har biri o'z satrida) va oxirida murojaat tugmasi.
     """
     total_days = 40 if weight >= 100 else 30
-    builder = InlineKeyboardBuilder()
 
-    # Instagram tugmasi — faqat bitta tugma, to‘liq qatorni egallaydi
-    builder.row(
+    rows = []
+
+    # 1) Instagram tugmasi — alohida satr (single button row)
+    rows.append([
         InlineKeyboardButton(
             text="🎁 Instagramdan PROMOKOD olish",
             url=INSTAGRAM_URL
         )
-    )
+    ])
 
-    # Kun tugmalari
+    # 2) Kun tugmalari: tayyorlaymiz va 4-lik guruhlaymiz
+    day_buttons = []
     for day in range(1, total_days + 1):
         if day == current_day:
-            builder.button(text=f"💚 Kun {day}", callback_data=f"day_{day}")
+            day_buttons.append(InlineKeyboardButton(text=f"💚 Kun {day}", callback_data=f"day_{day}"))
         elif day < current_day:
-            builder.button(text=f"✅ Kun {day}", callback_data=f"day_{day}")
+            day_buttons.append(InlineKeyboardButton(text=f"✅ Kun {day}", callback_data=f"day_{day}"))
         else:
-            builder.button(text=f"🔒 Kun {day}", callback_data="locked")
+            day_buttons.append(InlineKeyboardButton(text=f"🔒 Kun {day}", callback_data="locked"))
 
-    builder.adjust(4)
+    # chunk into rows of 4
+    for i in range(0, len(day_buttons), 4):
+        rows.append(day_buttons[i:i+4])
 
-    # extra buttons (masalan: "🎁 Promokod bor")
+    # 3) Extra buttons (agar kerak bo'lsa) — har biri o'z satrida
     if extra_buttons:
         for btn in extra_buttons:
-            builder.row(btn)
+            rows.append([btn])
 
-    # Murojaat qilish tugmasi oxirida
-    builder.row(
-        InlineKeyboardButton(text="💬 Murojaat qilish", url=OZISH_BOT)
-    )
+    # 4) Murojaat qilish tugmasi (oxirgi satr)
+    rows.append([InlineKeyboardButton(text="💬 Murojaat qilish", url=OZISH_BOT)])
 
-    return builder.as_markup()
-
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 # ---------- Daily reminders ----------
 async def send_daily_reminders():
@@ -254,12 +254,13 @@ async def start_handler(message: Message, state: FSMContext):
         "- Natijada: 30 kunda -16 kg, 40 kunda -19 kg.\n\n"
         "✅ <b>Birinchi 3 kun — mutlaqo bepul!</b>\n"
         "4-kundan boshlab premium ishtirokchilar davom ettirishlari mumkin.\n\n"
-        "🎁 Chegirma olish uchun faqat Instagram kanalimiz orqali promokod beriladi —\n"
-        "yuqoridagi tugmaga bosing: \n\n"
-        f"<a href=\"{INSTAGRAM_URL}\">{INSTAGRAM_URL}</a>\n\n"
-        "Ismingizni kiriting:"
+        "🎁 Chegirma olish uchun promokod faqat Instagram kanalimizda tarqatiladi —\n"
+        f"👉 <a href=\"{INSTAGRAM_URL}\">Instagramga o‘tish</a>\n\n"
+        "Ismingizni kiriting:",
+        parse_mode="HTML"
     )
     await state.set_state(Form.name)
+
 
 @router.message(Form.name)
 async def get_name(message: Message, state: FSMContext):
