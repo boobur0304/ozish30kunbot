@@ -213,13 +213,16 @@ async def get_age(message: Message, state: FSMContext):
 async def get_weight(message: Message, state: FSMContext):
     user_id = message.from_user.id
     data = await state.get_data()
+
     if not message.text.isdigit():
         await message.answer("⚠️ Vazn faqat raqam bo‘lishi kerak (masalan: 78).")
         return
+
     weight = int(message.text)
     if weight < 30 or weight > 300:
         await message.answer("⚠️ Vazn 30 dan 300 kg orasida bo‘lishi kerak.")
         return
+
     user_data = {
         "name": data['name'],
         "surname": data['surname'],
@@ -229,7 +232,8 @@ async def get_weight(message: Message, state: FSMContext):
         "paid_days": []
     }
     await set_user_data(user_id, user_data)
-    # send admin notification (log error if fails)
+
+    # --- Admin’ga xabar yuborish ---
     admin_text = (
         f"🆕 Yangi foydalanuvchi!\n\n"
         f"👤 Ism: {user_data['name']}\n"
@@ -241,14 +245,22 @@ async def get_weight(message: Message, state: FSMContext):
         await bot.send_message(ADMIN_ID, admin_text)
     except Exception as e:
         logging.exception("Failed to send admin notification: %s", e)
-    # reply with keyboard (1-kun ochiq)
+
+    # --- Foydalanuvchiga tasdiq xabar va kun tugmalari ---
     days_keyboard = build_days_keyboard(weight, 1)
-    await message.answer(
-        "✅ Ma’lumotlaringiz qabul qilindi!\n\n"
-        "▶️ Pastdan <b>1-kun</b> tugmasini bosing va boshlang 👇",
-        reply_markup=days_keyboard
+
+    user_text = (
+        f"✅ <b>Ma’lumotlaringiz qabul qilindi!</b>\n\n"
+        f"👤 Ism: <b>{user_data['name']}</b>\n"
+        f"👤 Familiya: <b>{user_data['surname']}</b>\n"
+        f"🎂 Yosh: <b>{user_data['age']} da</b>\n"
+        f"⚖️ Vazn: <b>{user_data['weight']} kg</b>\n\n"
+        "▶️ Pastdan <b>1-kun</b> tugmasini bosib boshlang 👇"
     )
+
+    await message.answer(user_text, reply_markup=days_keyboard)
     await state.clear()
+
 
 @router.callback_query(F.data.startswith("day_"))
 async def show_day(callback: CallbackQuery):
