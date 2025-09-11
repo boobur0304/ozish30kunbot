@@ -166,15 +166,22 @@ def get_payment_text(weight, day):
             "▫️ 40 kunda <b>-19 kg</b>\n\n"
             f"💳 <b>To‘lov narxi:</b> <s>199,000 so‘m</s> ➝ <b>145,000 so‘m</b>\n"
             "(kuniga ~4,800 so‘m, ya’ni bir choy narxi)\n\n"
-            f"💳 Karta raqami: <code>{CARD_NUMBER}</code>\n"
-            "👤 Karta egasi: <b>B.Nematov</b>\n\n"
+            f"💳 <b>Karta raqami:</b> <code>{CARD_NUMBER}</code>\n"
+            "👤 <b>Karta egasi:</b> <b>B.Nematov</b>\n\n"
             "📸 <b>To‘lov chekini shu botga yuboring.</b>\n"
             "⏱ <i>10 daqiqa ichida admin tasdiqlaydi</i> va keyingi kuningiz ochiladi!\n\n"
             "⚡️ <b>Eslatma:</b> Agar bugun to‘lamasangiz, dastur <u>to‘xtab qoladi</u> "
-            "va natija <u>kechikadi</u>."
+            "va natija <u>kechikadi</u>.\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n\n"
+            "✨ <b>Siz bu narxga yana chegirma olishingiz mumkin!</b>\n\n"
+            "📲 Buning uchun:\n"
+            "1️⃣ <b>Instagram sahifamizga o‘ting</b> va sahifaga obuna bo‘ling.\n"
+            "2️⃣ <b>Promokod oling</b> (sahifada e’lon qilinadi).\n"
+            "3️⃣ Botdagi <b>“🎁 Promokod bor”</b> tugmasini bosing va kodingizni kiriting.\n\n"
+            "✅ Shunda adminlar sizga chegirma qo‘llashadi.\n\n"
+            "❓ Savollar bo‘lsa, pastdagi <b>“💬 Murojaat qilish”</b> tugmasini bosing."
         )
     return ""
-
 
 def build_days_keyboard(weight, current_day, extra_buttons: list = None):
     """
