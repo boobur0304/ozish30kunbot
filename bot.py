@@ -179,18 +179,21 @@ def get_payment_text(weight, day):
 
 def build_days_keyboard(weight, current_day, extra_buttons: list = None):
     """
-    Instagram tugmasi yuqorida, keyin kun tugmalari, keyin qo'shimcha tugmalar va oxirida murojaat.
-    extra_buttons — list of InlineKeyboardButton
+    Instagram tugmasi yuqorida, u butun satrni egallaydi (to'liq kenglikda).
+    Keyin kun tugmalari, qo'shimcha tugmalar va oxirida murojaat tugmasi.
     """
     total_days = 40 if weight >= 100 else 30
     builder = InlineKeyboardBuilder()
 
-    # Instagram button on top
+    # Instagram tugmasi — faqat bitta tugma, to‘liq qatorni egallaydi
     builder.row(
-        InlineKeyboardButton(text="🎁 Promokod olish (Instagram)", url=INSTAGRAM_URL)
+        InlineKeyboardButton(
+            text="🎁 Instagramdan PROMOKOD olish",
+            url=INSTAGRAM_URL
+        )
     )
 
-    # Day buttons
+    # Kun tugmalari
     for day in range(1, total_days + 1):
         if day == current_day:
             builder.button(text=f"💚 Kun {day}", callback_data=f"day_{day}")
@@ -201,15 +204,18 @@ def build_days_keyboard(weight, current_day, extra_buttons: list = None):
 
     builder.adjust(4)
 
-    # extra buttons (e.g., 'Promokod bor' when viewing payment)
+    # extra buttons (masalan: "🎁 Promokod bor")
     if extra_buttons:
         for btn in extra_buttons:
             builder.row(btn)
 
-    # Contact button last
-    builder.row(InlineKeyboardButton(text="💬 Murojaat qilish", url=OZISH_BOT))
+    # Murojaat qilish tugmasi oxirida
+    builder.row(
+        InlineKeyboardButton(text="💬 Murojaat qilish", url=OZISH_BOT)
+    )
 
     return builder.as_markup()
+
 
 # ---------- Daily reminders ----------
 async def send_daily_reminders():
