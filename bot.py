@@ -1,5 +1,5 @@
 # improved_bot_with_tz.py
-# Yangilangan versiya: Toshkent (Asia/Tashkent) vaqtiga mos reminder
+# Yangilangan va qayta tekshirilgan versiya: Toshkent (Asia/Tashkent) vaqtiga mos reminder
 # Muallif: ChatGPT yordamida yangilandi
 
 import logging
@@ -24,6 +24,16 @@ from aiogram.types import Message, CallbackQuery
 
 from dotenv import load_dotenv
 load_dotenv()
+
+# ---------- States (MUST be defined before handlers) ----------
+class Form(StatesGroup):
+    name = State()
+    surname = State()
+    age = State()
+    weight = State()
+
+class PromoForm(StatesGroup):
+    code = State()
 
 # ---------- Config (env override possible) ----------
 API_TOKEN = os.getenv("BOT_TOKEN")
@@ -111,6 +121,19 @@ async def load_promos():
 async def save_promos(promos: dict):
     await save_json(PROMOS_PATH, promos_lock, promos)
 
+# ---------- Utility: get/set user data (kept before handlers for clarity) ----------
+async def get_user_data(user_id):
+    users = await load_users()
+    user = users.get(str(user_id))
+    if user and "paid_days" not in user:
+        user["paid_days"] = []
+    return user
+
+async def set_user_data(user_id, data):
+    users = await load_users()
+    users[str(user_id)] = data
+    await save_users(users)
+
 # ---------- Helpers ----------
 
 def mask_card(number: str) -> str:
@@ -132,26 +155,56 @@ def read_day_file(weight, day):
 def get_payment_text(weight, day):
     if day == 4:
         return (
-            "🎉 Siz 3 kunlik <b>bepul dasturdan</b> muvaffaqiyatli o‘tdingiz!\n\n"
-            "👉 Endi <b>premium bosqichni</b> davom ettirish uchun to‘lov qilishingiz kerak.\n\n"
-            "✅ Natijada:\n"
-            "▫️ 30 kunda <b>-16 kg</b>\n"
-            "▫️ 40 kunda <b>-19 kg</b>\n\n"
-            f"💳 <b>To‘lov narxi:</b> <s>199,000 so‘m</s> ➝ <b>145,000 so‘m</b>\n"
-            "(kuniga ~4,800 so‘m, ya’ni bir choy narxi)\n\n"
-            f"💳 <b>Karta raqami:</b> <code>{CARD_NUMBER}</code>\n"
-            "👤 <b>Karta egasi:</b> <b>B.Nematov</b>\n\n"
-            "📸 <b>To‘lov chekini shu botga yuboring.</b>\n"
-            "⏱ <i>10 daqiqa ichida admin tasdiqlaydi</i> va keyingi kuningiz ochiladi!\n\n"
+            "🎉 Siz 3 kunlik <b>bepul dasturdan</b> muvaffaqiyatli o‘tdingiz!
+
+"
+            "👉 Endi <b>premium bosqichni</b> davom ettirish uchun to‘lov qilishingiz kerak.
+
+"
+            "✅ Natijada:
+"
+            "▫️ 30 kunda <b>-16 kg</b>
+"
+            "▫️ 40 kunda <b>-19 kg</b>
+
+"
+            f"💳 <b>To‘lov narxi:</b> <s>199,000 so‘m</s> ➝ <b>145,000 so‘m</b>
+"
+            "(kuniga ~4,800 so‘m, ya’ni bir choy narxi)
+
+"
+            f"💳 <b>Karta raqami:</b> <code>{CARD_NUMBER}</code>
+"
+            "👤 <b>Karta egasi:</b> <b>B.Nematov</b>
+
+"
+            "📸 <b>To‘lov chekini shu botga yuboring.</b>
+"
+            "⏱ <i>10 daqiqa ichida admin tasdiqlaydi</i> va keyingi kuningiz ochiladi!
+
+"
             "⚡️ <b>Eslatma:</b> Agar bugun to‘lamasangiz, dastur <u>to‘xtab qoladi</u> "
-            "va natija <u>kechikadi</u>.\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n\n"
-            "✨ <b>Siz bu narxga yana chegirma olishingiz mumkin!</b>\n\n"
-            "📲 Buning uchun:\n"
-            "1️⃣ <b>Instagram sahifamizga o‘ting</b> va sahifaga obuna bo‘ling.\n"
-            "2️⃣ <b>Promokod oling</b> (sahifada e’lon qilinadi).\n"
-            "3️⃣ Botdagi <b>“🎁 Promokod bor”</b> tugmasini bosing va kodingizni kiriting.\n\n"
-            "✅ Shunda adminlar sizga chegirma qo‘llashadi.\n\n"
+            "va natija <u>kechikadi</u>.
+
+"
+            "━━━━━━━━━━━━━━━━━━━
+
+"
+            "✨ <b>Siz bu narxga yana chegirma olishingiz mumkin!</b>
+
+"
+            "📲 Buning uchun:
+"
+            "1️⃣ <b>Instagram sahifamizga o‘ting</b> va sahifaga obuna bo‘ling.
+"
+            "2️⃣ <b>Promokod oling</b> (sahifada e’lon qilinadi).
+"
+            "3️⃣ Botdagi <b>“🎁 Promokod bor”</b> tugmasini bosing va kodingizni kiriting.
+
+"
+            "✅ Shunda adminlar sizga chegirma qo‘llashadi.
+
+"
             "❓ Savollar bo‘lsa, pastdagi <b>“💬 Murojaat qilish”</b> tugmasini bosing."
         )
     return ""
@@ -230,8 +283,11 @@ async def send_daily_reminders():
                 current_day = user.get("day", 1)
                 weight = user.get("weight", 0)
                 text = (
-                    f"☀️ <b>Xayrli tong, {user.get('name', '')}!</b>\n\n"
-                    f"🔥 Bugungi mashqlar va menyu tayyor.\n"
+                    f"☀️ <b>Xayrli tong, {user.get('name', '')}!</b>
+
+"
+                    f"🔥 Bugungi mashqlar va menyu tayyor.
+"
                     f"👉 Pastdagi tugma orqali <b>{current_day}-kun</b> ni boshlang!"
                 )
                 await bot.send_message(
@@ -247,14 +303,25 @@ async def send_daily_reminders():
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext):
     await message.answer(
-        "🎯 <b>Marafon haqida:</b>\n"
-        "- Bu shunchaki bot emas, bu — dietolog va trenerlar tayyorlagan maxsus dastur.\n"
-        "- Sizga 30 kunlik individual menyu, mashqlar va motivatsiya beriladi.\n"
-        "- Natijada: 30 kunda -16 kg, 40 kunda -19 kg.\n\n"
-        "✅ <b>Birinchi 3 kun — mutlaqo bepul!</b>\n"
-        "4-kundan boshlab premium ishtirokchilar davom ettirishlari mumkin.\n\n"
-        "🎁 Chegirma olish uchun promokod faqat Instagram kanalimizda tarqatiladi —\n"
-        f"👉 <a href=\"{INSTAGRAM_URL}\">Instagramga o‘tish</a>\n\n"
+        "🎯 <b>Marafon haqida:</b>
+"
+        "- Bu shunchaki bot emas, bu — dietolog va trenerlar tayyorlagan maxsus dastur.
+"
+        "- Sizga 30 kunlik individual menyu, mashqlar va motivatsiya beriladi.
+"
+        "- Natijada: 30 kunda -16 kg, 40 kunda -19 kg.
+
+"
+        "✅ <b>Birinchi 3 kun — mutlaqo bepul!</b>
+"
+        "4-kundan boshlab premium ishtirokchilar davom ettirishlari mumkin.
+
+"
+        "🎁 Chegirma olish uchun promokod faqat Instagram kanalimizda tarqatiladi —
+"
+        f"👉 <a href=\"{INSTAGRAM_URL}\">Instagramga o‘tish</a>
+
+"
         "Ismingizni kiriting:",
         parse_mode="HTML"
     )
@@ -323,10 +390,15 @@ async def get_weight(message: Message, state: FSMContext):
 
     # Admin notification
     admin_text = (
-        f"🆕 Yangi foydalanuvchi!\n\n"
-        f"👤 Ism: {user_data['name']}\n"
-        f"👤 Familiya: {user_data['surname']}\n"
-        f"🎂 Yosh: {user_data['age']} da\n"
+        f"🆕 Yangi foydalanuvchi!
+
+"
+        f"👤 Ism: {user_data['name']}
+"
+        f"👤 Familiya: {user_data['surname']}
+"
+        f"🎂 Yosh: {user_data['age']} da
+"
         f"⚖️ Vazn: {user_data['weight']} kg"
     )
     try:
@@ -337,11 +409,18 @@ async def get_weight(message: Message, state: FSMContext):
     days_keyboard = build_days_keyboard(weight, 1)
 
     user_text = (
-        f"✅ <b>Ma’lumotlaringiz qabul qilindi!</b>\n\n"
-        f"👤 Ism: <b>{user_data['name']}</b>\n"
-        f"👤 Familiya: <b>{user_data['surname']}</b>\n"
-        f"🎂 Yosh: <b>{user_data['age']} da</b>\n"
-        f"⚖️ Vazn: <b>{user_data['weight']} kg</b>\n\n"
+        f"✅ <b>Ma’lumotlaringiz qabul qilindi!</b>
+
+"
+        f"👤 Ism: <b>{user_data['name']}</b>
+"
+        f"👤 Familiya: <b>{user_data['surname']}</b>
+"
+        f"🎂 Yosh: <b>{user_data['age']} da</b>
+"
+        f"⚖️ Vazn: <b>{user_data['weight']} kg</b>
+
+"
         "▶️ Pastdan <b>1-kun</b> tugmasini bosing va boshlang 👇"
     )
 
@@ -375,7 +454,9 @@ async def show_day(callback: CallbackQuery):
         return
 
     text = read_day_file(weight, day)
-    text += "\n\n❓ Savollar bo‘lsa dietologga murojaat qiling 👇"
+    text += "
+
+❓ Savollar bo‘lsa dietologga murojaat qiling 👇"
     if day == current_day and current_day < total_days:
         user["day"] = current_day + 1
         await set_user_data(user_id, user)
@@ -424,8 +505,11 @@ async def check_promo(message: Message, state: FSMContext):
     await set_user_data(user_id, user)
 
     await message.answer(
-        f"✅ Promokod qabul qilindi: <b>{code}</b>\n"
-        f"💳 Sizning chegirmali narxingiz: <b>{narx:,} so‘m</b>\n\n"
+        f"✅ Promokod qabul qilindi: <b>{code}</b>
+"
+        f"💳 Sizning chegirmali narxingiz: <b>{narx:,} so‘m</b>
+
+"
         "Iltimos, to‘lov qilganingizdan so‘ng chekni shu botga rasm qilib yuboring."
     )
     await state.clear()
@@ -455,14 +539,20 @@ async def handle_payment_photo(message: Message):
     await save_tokens(tokens)
 
     caption = (
-        f"💳 <b>Yangi to‘lov cheki</b>\n"
-        f"ID: <code>{user_id}</code>\n"
-        f"Ism: <b>{user.get('name','')} {user.get('surname','')}</b>\n"
-        f"Narx: <b>{price:,} so'm</b>\n"
+        f"💳 <b>Yangi to‘lov cheki</b>
+"
+        f"ID: <code>{user_id}</code>
+"
+        f"Ism: <b>{user.get('name','')} {user.get('surname','')}</b>
+"
+        f"Narx: <b>{price:,} so'm</b>
+"
     )
     if promo:
-        caption += f"Promokod: <b>{promo}</b>\n"
-    caption += f"\n✅ <b>Tasdiqlash kodi:</b> <code>{token}</code>"
+        caption += f"Promokod: <b>{promo}</b>
+"
+    caption += f"
+✅ <b>Tasdiqlash kodi:</b> <code>{token}</code>"
 
     try:
         await bot.send_photo(chat_id=ADMIN_ID, photo=photo_id, caption=caption, parse_mode="HTML")
@@ -526,8 +616,10 @@ async def add_promo(message: Message):
 
     args = message.text.split()
     if len(args) != 3:
-        await message.answer("⚠️ Foydalanish: /addpromo KOD chegirma\n"
-                             "Masalan:\n"
+        await message.answer("⚠️ Foydalanish: /addpromo KOD chegirma
+"
+                             "Masalan:
+"
                              "/addpromo PROMO30 30 (foiz) yoki /addpromo START99 99000 (fiks narx)")
         return
 
@@ -567,7 +659,8 @@ async def delete_promo(message: Message):
 
     args = message.text.split()
     if len(args) != 2:
-        await message.answer("⚠️ Foydalanish: /delpromo PROMOKOD\nMasalan: /delpromo PROMO30")
+        await message.answer("⚠️ Foydalanish: /delpromo PROMOKOD
+Masalan: /delpromo PROMO30")
         return
 
     code = args[1].upper()
@@ -614,36 +707,18 @@ async def show_stats(callback: CallbackQuery):
     count_100_minus = total - count_100_plus
     tolovchilar = sum(1 for u in users.values() if u.get("paid_days"))
     await callback.message.edit_text(
-        f"📊 <b>Foydalanuvchilar statistikasi:</b>\n\n"
-        f"🔹 Jami: <b>{total}</b>\n"
-        f"⚖️ 100 kg dan kam: <b>{count_100_minus}</b>\n"
-        f"⚖️ 100 kg va undan ortiq: <b>{count_100_plus}</b>\n"
+        f"📊 <b>Foydalanuvchilar statistikasi:</b>
+
+"
+        f"🔹 Jami: <b>{total}</b>
+"
+        f"⚖️ 100 kg dan kam: <b>{count_100_minus}</b>
+"
+        f"⚖️ 100 kg va undan ortiq: <b>{count_100_plus}</b>
+"
         f"💰 To‘lov qilganlar: <b>{tolovchilar}</b>",
         parse_mode="HTML"
     )
-
-# ---------- Utility: get/set user data ----------
-async def get_user_data(user_id):
-    users = await load_users()
-    user = users.get(str(user_id))
-    if user and "paid_days" not in user:
-        user["paid_days"] = []
-    return user
-
-async def set_user_data(user_id, data):
-    users = await load_users()
-    users[str(user_id)] = data
-    await save_users(users)
-
-# ---------- States ----------
-class Form(StatesGroup):
-    name = State()
-    surname = State()
-    age = State()
-    weight = State()
-
-class PromoForm(StatesGroup):
-    code = State()
 
 # ---------- Startup task registration ----------
 async def _on_startup():
