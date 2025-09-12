@@ -1,10 +1,14 @@
-# improved_bot.py
+# improved_bot_with_tz.py
+# Yangilangan versiya: Toshkent (Asia/Tashkent) vaqtiga mos reminder
+# Muallif: ChatGPT yordamida yangilandi
+
 import logging
 import json
 import os
 import uuid
 import asyncio
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
@@ -21,23 +25,35 @@ from aiogram.types import Message, CallbackQuery
 from dotenv import load_dotenv
 load_dotenv()
 
-# ---------- Config ----------
+# ---------- Config (env override possible) ----------
 API_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "983517327"))
+try:
+    ADMIN_ID = int(os.getenv("ADMIN_ID", "983517327"))
+except Exception:
+    ADMIN_ID = 983517327
 CARD_NUMBER = os.getenv("CARD_NUMBER", "9860350110461737")
 INSTAGRAM_URL = os.getenv("INSTAGRAM_URL", "https://www.instagram.com/ozish30kunbot")
+RESULT_CHANNEL_LINK = os.getenv("RESULT_CHANNEL_LINK", "https://t.me/ozishchatbot")
+OZISH_BOT = os.getenv("OZISH_BOT", "https://t.me/OzishChatBot")
+# Reminder hour in Tashkent time (default 7)
+REMINDER_HOUR = int(os.getenv("REMINDER_HOUR", "7"))
 
-logging.basicConfig(level=logging.INFO)
+# Timezone
+UZBEKISTAN_TZ = ZoneInfo("Asia/Tashkent")
+
+# ---------- Logging ----------
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logger = logging.getLogger(__name__)
+
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher(storage=MemoryStorage())
 router = Router()
 dp.include_router(router)
 
+# Database files
 USERS_PATH = "database/users.json"
 TOKENS_PATH = "database/tokens.json"
 PROMOS_PATH = "database/promos.json"
-RESULT_CHANNEL_LINK = os.getenv("RESULT_CHANNEL_LINK", "https://t.me/ozishchatbot")
-OZISH_BOT = os.getenv("OZISH_BOT", "https://t.me/OzishChatBot")
 
 os.makedirs("database", exist_ok=True)
 # ensure files exist
@@ -46,107 +62,63 @@ for p in (TOKENS_PATH, USERS_PATH, PROMOS_PATH):
         with open(p, 'w', encoding='utf-8') as f:
             json.dump({}, f, ensure_ascii=False)
 
-# Locks to protect file access inside the same process
+# Locks
 users_lock = asyncio.Lock()
 tokens_lock = asyncio.Lock()
 promos_lock = asyncio.Lock()
 
-# States
-class Form(StatesGroup):
-    name = State()
-    surname = State()
-    age = State()
-    weight = State()
-
-class PromoForm(StatesGroup):
-    code = State()
-
-# ---------- Safe file IO (async with locks) ----------
-async def load_users():
-    async with users_lock:
+# ---------- Generic JSON helpers ----------
+async def load_json(path: str, lock: asyncio.Lock):
+    async with lock:
         try:
-            with open(USERS_PATH, 'r', encoding='utf-8') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            logging.warning("users.json JSONDecodeError — returning empty dict")
+            logger.warning("%s JSONDecodeError — returning empty dict", path)
+            return {}
+        except FileNotFoundError:
             return {}
         except Exception as e:
-            logging.exception("load_users error: %s", e)
+            logger.exception("load_json(%s) error: %s", path, e)
             return {}
 
-async def save_users(users):
-    async with users_lock:
+async def save_json(path: str, lock: asyncio.Lock, data: dict):
+    async with lock:
         try:
-            tmp = USERS_PATH + ".tmp"
+            tmp = path + ".tmp"
             with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(users, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, USERS_PATH)
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, path)
         except Exception as e:
-            logging.exception("save_users error: %s", e)
+            logger.exception("save_json(%s) error: %s", path, e)
 
-async def get_user_data(user_id):
-    users = await load_users()
-    user = users.get(str(user_id))
-    if user and "paid_days" not in user:
-        user["paid_days"] = []
-    return user
+# Specific wrappers
+async def load_users():
+    return await load_json(USERS_PATH, users_lock)
 
-async def set_user_data(user_id, data):
-    users = await load_users()
-    users[str(user_id)] = data
-    await save_users(users)
+async def save_users(users: dict):
+    await save_json(USERS_PATH, users_lock, users)
 
 async def load_tokens():
-    async with tokens_lock:
-        try:
-            with open(TOKENS_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            logging.warning("tokens.json JSONDecodeError — returning empty dict")
-            return {}
-        except Exception as e:
-            logging.exception("load_tokens error: %s", e)
-            return {}
+    return await load_json(TOKENS_PATH, tokens_lock)
 
-async def save_tokens(tokens):
-    async with tokens_lock:
-        try:
-            tmp = TOKENS_PATH + ".tmp"
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(tokens, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, TOKENS_PATH)
-        except Exception as e:
-            logging.exception("save_tokens error: %s", e)
+async def save_tokens(tokens: dict):
+    await save_json(TOKENS_PATH, tokens_lock, tokens)
 
-# promos (async)
 async def load_promos():
-    async with promos_lock:
-        try:
-            with open(PROMOS_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            logging.warning("promos.json JSONDecodeError — returning empty dict")
-            return {}
-        except Exception as e:
-            logging.exception("load_promos error: %s", e)
-            return {}
+    return await load_json(PROMOS_PATH, promos_lock)
 
-async def save_promos(promos):
-    async with promos_lock:
-        try:
-            tmp = PROMOS_PATH + ".tmp"
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(promos, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, PROMOS_PATH)
-        except Exception as e:
-            logging.exception("save_promos error: %s", e)
+async def save_promos(promos: dict):
+    await save_json(PROMOS_PATH, promos_lock, promos)
 
 # ---------- Helpers ----------
+
 def mask_card(number: str) -> str:
     s = number.replace(" ", "")
     if len(s) >= 16:
         return f"{s[:4]} {s[4:8]} **** {s[-4:]}"
     return number
+
 
 def read_day_file(weight, day):
     folder = "data/days_plus" if weight >= 100 else "data/days"
@@ -155,6 +127,7 @@ def read_day_file(weight, day):
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
     return "❌ Ushbu kun uchun ma'lumot topilmadi."
+
 
 def get_payment_text(weight, day):
     if day == 4:
@@ -183,6 +156,7 @@ def get_payment_text(weight, day):
         )
     return ""
 
+
 def build_days_keyboard(weight, current_day, extra_buttons: list = None):
     """
     Instagram tugmasi yuqorida (sala keng), keyin kun tugmalari 4 tadan guruhlangan,
@@ -192,7 +166,7 @@ def build_days_keyboard(weight, current_day, extra_buttons: list = None):
 
     rows = []
 
-    # 1) Instagram tugmasi — alohida satr (single button row)
+    # instagram row
     rows.append([
         InlineKeyboardButton(
             text="🎁 Instagramdan PROMOKOD olish",
@@ -200,7 +174,6 @@ def build_days_keyboard(weight, current_day, extra_buttons: list = None):
         )
     ])
 
-    # 2) Kun tugmalari: tayyorlaymiz va 4-lik guruhlaymiz
     day_buttons = []
     for day in range(1, total_days + 1):
         if day == current_day:
@@ -210,31 +183,49 @@ def build_days_keyboard(weight, current_day, extra_buttons: list = None):
         else:
             day_buttons.append(InlineKeyboardButton(text=f"🔒 Kun {day}", callback_data="locked"))
 
-    # chunk into rows of 4
     for i in range(0, len(day_buttons), 4):
         rows.append(day_buttons[i:i+4])
 
-    # 3) Extra buttons (agar kerak bo'lsa) — har biri o'z satrida
     if extra_buttons:
         for btn in extra_buttons:
             rows.append([btn])
 
-    # 4) Murojaat qilish tugmasi (oxirgi satr)
     rows.append([InlineKeyboardButton(text="💬 Murojaat qilish", url=OZISH_BOT)])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
-# ---------- Daily reminders ----------
+# ---------- Reminder task (Toshkent vaqti bilan) ----------
 async def send_daily_reminders():
+    """Background task that wakes up at REMINDER_HOUR (Asia/Tashkent) every day and sends reminders."""
+    hour = REMINDER_HOUR
+    tz = UZBEKISTAN_TZ
+    logger.info("send_daily_reminders started (Tashkent timezone) — hour=%s", hour)
+
     while True:
-        now = datetime.now()
-        send_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
-        if now > send_time:
+        now = datetime.now(tz)
+        # next occurrence at today:hour:00
+        send_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if now >= send_time:
             send_time += timedelta(days=1)
+
         wait_seconds = (send_time - now).total_seconds()
-        await asyncio.sleep(wait_seconds)
+        logger.info("Next reminders at %s (in %.0f seconds)", send_time.isoformat(), wait_seconds)
+
+        try:
+            # sleep until next scheduled time
+            await asyncio.sleep(wait_seconds)
+        except asyncio.CancelledError:
+            logger.info("send_daily_reminders cancelled — exiting task")
+            return
+        except Exception as e:
+            logger.exception("Unexpected error while sleeping in reminder task: %s", e)
+            # small delay to avoid tight loop on unexpected errors
+            await asyncio.sleep(60)
+            continue
+
+        # it's time to send reminders
         users = await load_users()
-        for user_id, user in users.items():
+        for user_id, user in list(users.items()):
             try:
                 current_day = user.get("day", 1)
                 weight = user.get("weight", 0)
@@ -249,9 +240,10 @@ async def send_daily_reminders():
                     reply_markup=build_days_keyboard(weight, current_day)
                 )
             except Exception as e:
-                logging.error(f"Eslatma yuborishda xato ({user_id}): {e}")
+                # if chat blocked or other error, just log and continue
+                logger.exception("Eslatma yuborishda xato (%s): %s", user_id, e)
 
-# ---------- Handlers ----------
+# ---------- Handlers (unchanged logic, but kept robust) ----------
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext):
     await message.answer(
@@ -279,6 +271,7 @@ async def get_name(message: Message, state: FSMContext):
     await message.answer("Familiyangizni kiriting:")
     await state.set_state(Form.surname)
 
+
 @router.message(Form.surname)
 async def get_surname(message: Message, state: FSMContext):
     txt = message.text.strip()
@@ -288,6 +281,7 @@ async def get_surname(message: Message, state: FSMContext):
     await state.update_data(surname=txt)
     await message.answer("Yoshingizni kiriting (faqat raqam, masalan: 25):")
     await state.set_state(Form.age)
+
 
 @router.message(Form.age)
 async def get_age(message: Message, state: FSMContext):
@@ -301,6 +295,7 @@ async def get_age(message: Message, state: FSMContext):
     await state.update_data(age=age)
     await message.answer("Vazningizni kiriting (kg, masalan: 78):")
     await state.set_state(Form.weight)
+
 
 @router.message(Form.weight)
 async def get_weight(message: Message, state: FSMContext):
@@ -337,9 +332,8 @@ async def get_weight(message: Message, state: FSMContext):
     try:
         await bot.send_message(ADMIN_ID, admin_text)
     except Exception as e:
-        logging.exception("Failed to send admin notification: %s", e)
+        logger.exception("Failed to send admin notification: %s", e)
 
-    # Send confirmation with days keyboard (Instagram button top)
     days_keyboard = build_days_keyboard(weight, 1)
 
     user_text = (
@@ -353,6 +347,7 @@ async def get_weight(message: Message, state: FSMContext):
 
     await message.answer(user_text, reply_markup=days_keyboard)
     await state.clear()
+
 
 @router.callback_query(F.data.startswith("day_"))
 async def show_day(callback: CallbackQuery):
@@ -379,14 +374,13 @@ async def show_day(callback: CallbackQuery):
         await callback.message.edit_text(get_payment_text(weight, day), reply_markup=markup)
         return
 
-    # read day content
     text = read_day_file(weight, day)
     text += "\n\n❓ Savollar bo‘lsa dietologga murojaat qiling 👇"
-    # if user saw current day, open next one (atomic via set_user_data lock)
     if day == current_day and current_day < total_days:
         user["day"] = current_day + 1
         await set_user_data(user_id, user)
     await callback.message.edit_text(text, reply_markup=build_days_keyboard(weight, user["day"]))
+
 
 @router.callback_query(F.data == "locked")
 async def locked_day(callback: CallbackQuery):
@@ -398,6 +392,7 @@ async def ask_promo(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("🎁 Iltimos, promokodingizni kiriting (masalan: PROMO30):")
     await state.set_state(PromoForm.code)
 
+
 @router.message(PromoForm.code)
 async def check_promo(message: Message, state: FSMContext):
     code = message.text.strip().upper()
@@ -408,7 +403,6 @@ async def check_promo(message: Message, state: FSMContext):
         return
 
     value = promos[code]
-    # determine price: if value is int -> fixed price, if percent like "30%" -> percent
     if isinstance(value, int):
         narx = value
     elif isinstance(value, str) and value.endswith("%"):
@@ -425,7 +419,6 @@ async def check_promo(message: Message, state: FSMContext):
         await state.clear()
         return
 
-    # save promo and discounted price
     user['promo_code'] = code
     user['discounted_price'] = narx
     await set_user_data(user_id, user)
@@ -448,7 +441,6 @@ async def handle_payment_photo(message: Message):
     if not user:
         return
     day = user.get("day", 1)
-    # only stage 4 requires payment in current design
     if day == 4:
         stage = 4
     else:
@@ -475,7 +467,7 @@ async def handle_payment_photo(message: Message):
     try:
         await bot.send_photo(chat_id=ADMIN_ID, photo=photo_id, caption=caption, parse_mode="HTML")
     except Exception as e:
-        logging.exception("Failed to forward payment photo to admin: %s", e)
+        logger.exception("Failed to forward payment photo to admin: %s", e)
 
     await message.answer("✅ Chekingiz yuborildi. Admin ko‘rib chiqadi.")
 
@@ -505,7 +497,6 @@ async def confirm_payment_token(message: Message):
         user['day'] = 4
 
     user.setdefault("paid_days", []).append(stage)
-    # clear promo fields after confirmation to avoid reuse
     user.pop('discounted_price', None)
     user.pop('promo_code', None)
     await set_user_data(user_id, user)
@@ -513,7 +504,7 @@ async def confirm_payment_token(message: Message):
     try:
         await bot.send_message(chat_id=user_id, text=f"✅ To‘lov tasdiqlandi! {stage}-kun ochildi.")
     except Exception as e:
-        logging.exception("Failed to notify user about payment confirmation: %s", e)
+        logger.exception("Failed to notify user about payment confirmation: %s", e)
     await message.answer(f"☑️ {user.get('name','')} uchun {stage}-kun ochildi.")
 
 # ---------- Admin menu ----------
@@ -527,7 +518,7 @@ async def admin_menu(message: Message):
     ])
     await message.answer("🔧 Admin menyusi:", reply_markup=keyboard)
 
-# ---------- Add promo (admin) ----------
+# ---------- Add / Delete promo (admin) ----------
 @router.message(Command("addpromo"))
 async def add_promo(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -545,7 +536,6 @@ async def add_promo(message: Message):
 
     promos = await load_promos()
 
-    # if value ends with %
     if value.endswith("%"):
         try:
             percent = int(value[:-1])
@@ -569,7 +559,7 @@ async def add_promo(message: Message):
     await save_promos(promos)
     await message.answer(f"✅ Promokod qo‘shildi: {code} → {promos[code]}")
 
-# ---------- Delete promo (admin) ----------
+
 @router.message(Command("delpromo"))
 async def delete_promo(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -609,9 +599,10 @@ async def send_all(message: Message):
             await bot.send_message(int(user_id), text)
             count += 1
         except Exception as e:
-            logging.warning(f"{user_id} ga yuborilmadi: {e}")
+            logger.warning("%s ga yuborilmadi: %s", user_id, e)
 
     await message.answer(f"✅ Xabar {count} foydalanuvchiga yuborildi.")
+
 
 @router.callback_query(F.data == "stats")
 async def show_stats(callback: CallbackQuery):
@@ -631,9 +622,44 @@ async def show_stats(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
+# ---------- Utility: get/set user data ----------
+async def get_user_data(user_id):
+    users = await load_users()
+    user = users.get(str(user_id))
+    if user and "paid_days" not in user:
+        user["paid_days"] = []
+    return user
+
+async def set_user_data(user_id, data):
+    users = await load_users()
+    users[str(user_id)] = data
+    await save_users(users)
+
+# ---------- States ----------
+class Form(StatesGroup):
+    name = State()
+    surname = State()
+    age = State()
+    weight = State()
+
+class PromoForm(StatesGroup):
+    code = State()
+
+# ---------- Startup task registration ----------
+async def _on_startup():
+    """Called by aiogram dispatcher at startup. We create background task here."""
+    # create background task to send reminders
+    asyncio.create_task(send_daily_reminders())
+
+# register startup hook
+dp.startup.register(_on_startup)
+
 # ---------- Run ----------
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    # Kunlik eslatma taskini parallel ishga tushiramiz
-    loop.create_task(send_daily_reminders())
-    loop.run_until_complete(dp.start_polling(bot))
+    try:
+        logger.info("Starting bot...")
+        dp.run_polling(bot)
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Bot stopped by signal")
+    except Exception as e:
+        logger.exception("Bot stopped with error: %s", e)
