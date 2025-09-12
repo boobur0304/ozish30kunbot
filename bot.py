@@ -15,7 +15,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.enums import ParseMode
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram import Router
@@ -155,7 +154,7 @@ def read_day_file(weight, day):
 def get_payment_text(weight, day):
     if day == 4:
         return (
-            "🎉 Siz 3 kunlik <b>bepul dasturdan</b> muvaffaqiyatli o‘tdingiz!
+            f"🎉 Siz 3 kunlik <b>bepul dasturdan</b> muvaffaqiyatli o‘tdingiz!
 
 "
             "👉 Endi <b>premium bosqichni</b> davom ettirish uchun to‘lov qilishingiz kerak.
@@ -183,8 +182,7 @@ def get_payment_text(weight, day):
             "⏱ <i>10 daqiqa ichida admin tasdiqlaydi</i> va keyingi kuningiz ochiladi!
 
 "
-            "⚡️ <b>Eslatma:</b> Agar bugun to‘lamasangiz, dastur <u>to‘xtab qoladi</u> "
-            "va natija <u>kechikadi</u>.
+            "⚡️ <b>Eslatma:</b> Agar bugun to‘lamasangiz, dastur <u>to‘xtab qoladi</u> va natija <u>kechikadi</u>.
 
 "
             "━━━━━━━━━━━━━━━━━━━
@@ -286,7 +284,7 @@ async def send_daily_reminders():
                     f"☀️ <b>Xayrli tong, {user.get('name', '')}!</b>
 
 "
-                    f"🔥 Bugungi mashqlar va menyu tayyor.
+                    "🔥 Bugungi mashqlar va menyu tayyor.
 "
                     f"👉 Pastdagi tugma orqali <b>{current_day}-kun</b> ni boshlang!"
                 )
