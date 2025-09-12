@@ -226,13 +226,15 @@ def build_days_keyboard(weight, current_day, extra_buttons: list = None):
 
 # ---------- Daily reminders ----------
 async def send_daily_reminders():
+    tz = pytz.timezone("Asia/Tashkent")
     while True:
-        now = datetime.now()
-        send_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        now = datetime.now(tz)
+        send_time = now.replace(hour=7, minute=0, second=0, microsecond=0)
         if now > send_time:
             send_time += timedelta(days=1)
         wait_seconds = (send_time - now).total_seconds()
         await asyncio.sleep(wait_seconds)
+
         users = await load_users()
         for user_id, user in users.items():
             try:
@@ -250,7 +252,6 @@ async def send_daily_reminders():
                 )
             except Exception as e:
                 logging.error(f"Eslatma yuborishda xato ({user_id}): {e}")
-
 # ---------- Handlers ----------
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext):
