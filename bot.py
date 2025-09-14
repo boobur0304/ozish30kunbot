@@ -5,6 +5,7 @@ import os
 import uuid
 import asyncio
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
@@ -225,33 +226,78 @@ def build_days_keyboard(weight, current_day, extra_buttons: list = None):
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 # ---------- Daily reminders ----------
+# ---------- Daily reminders ----------
 async def send_daily_reminders():
-    tz = pytz.timezone("Asia/Tashkent")
-    while True:
-        now = datetime.now(tz)
-        send_time = now.replace(hour=7, minute=0, second=0, microsecond=0)
-        if now > send_time:
-            send_time += timedelta(days=1)
-        wait_seconds = (send_time - now).total_seconds()
-        await asyncio.sleep(wait_seconds)
+    """
+    Robust reminder task — sends messages every day at 07:00 Asia/Tashkent.
+    Uses zoneinfo and won't die on first error (catches exceptions and retries).
+    """
+    tz = ZoneInfo("Asia/Tashkent")
+    logger = logging.getLogger(__name__)
+    logger.info("Daily reminder task started (Asia/Tashkent)")
 
-        users = await load_users()
-        for user_id, user in users.items():
-            try:
-                current_day = user.get("day", 1)
-                weight = user.get("weight", 0)
-                text = (
-                    f"☀️ <b>Xayrli tong, {user.get('name', '')}!</b>\n\n"
-                    f"🔥 Bugungi mashqlar va menyu tayyor.\n"
-                    f"👉 Pastdagi tugma orqali <b>{current_day}-kun</b> ni boshlang!"
-                )
-                await bot.send_message(
-                    chat_id=int(user_id),
-                    text=text,
-                    reply_markup=build_days_keyboard(weight, current_day)
-                )
-            except Exception as e:
-                logging.error(f"Eslatma yuborishda xato ({user_id}): {e}")
+    while True:
+        try:
+            # hisoblash: keyingi 07:00 ni topamiz
+            now = datetime.now(tz)
+            send_time = now.replace(hour=7, minute=0, second=0, microsecond=0)
+            if now >= send_time:
+                send_time = send_time + timedelta(days=1)
+
+            wait_seconds = (send_time - now).total_seconds()
+            if wait_seconds < 0:
+                wait_seconds = 0.0
+
+            logger.info("Next reminders scheduled at %s (in %.0f seconds)", send_time.isoformat(), wait_seconds)
+
+            # Uzoq kutishni kichik bo'laklarga bo'lib bajarish (signal / cancel ga sezgir bo'lish uchun)
+            chunk = 60.0  # 60 soniya bo'laklar
+            while wait_seconds > 0:
+                to_sleep = min(chunk, wait_seconds)
+                await asyncio.sleep(to_sleep)
+                wait_seconds -= to_sleep
+
+            # Esdan chiqmaslik uchun hozirgi vaqtni qaytarib olamiz
+            now = datetime.now(tz)
+            users = await load_users()
+            if not users:
+                logger.info("No users found for reminders.")
+            for user_id_str, user in list(users.items()):
+                try:
+                    # user_id string bo'lib saqlangan — int ga o'tkazamiz
+                    try:
+                        chat_id = int(user_id_str)
+                    except Exception:
+                        logger.warning("Skipping invalid user id: %s", user_id_str)
+                        continue
+
+                    current_day = user.get("day", 1)
+                    weight = user.get("weight", 0)
+                    name = user.get("name", "")
+                    text = (
+                        f"☀️ <b>Xayrli tong, {name}!</b>\n\n"
+                        f"🔥 Bugungi mashqlar va menyu tayyor.\n"
+                        f"👉 Pastdagi tugma orqali <b>{current_day}-kun</b> ni boshlang!"
+                    )
+                    try:
+                        await bot.send_message(chat_id=chat_id, text=text, reply_markup=build_days_keyboard(weight, current_day))
+                        logger.info("Reminder sent to %s (day=%s)", chat_id, current_day)
+                    except Exception as e:
+                        logger.exception("Failed to send reminder to %s: %s", chat_id, e)
+                except Exception as e:
+                    logger.exception("Error processing user %s for reminders: %s", user_id_str, e)
+
+            # kichik pauza, ayniqsa agar biron-bir bug bo'lsa
+            await asyncio.sleep(1)
+
+        except asyncio.CancelledError:
+            logger.info("send_daily_reminders canceled, exiting task")
+            raise
+        except Exception as e:
+            logger.exception("Unhandled error in send_daily_reminders: %s", e)
+            # orqaga chekish — task o‘lmasligi uchun
+            await asyncio.sleep(60)
+
 # ---------- Handlers ----------
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext):
