@@ -158,10 +158,10 @@ def read_day_file(weight, day):
     return "❌ Ushbu kun uchun ma'lumot topilmadi."
 
 def get_payment_text(weight, day):
-    if day == 4:
+    # 1-kundan to‘lov
+    if day == 1:
         return (
-            "🎉 Siz 3 kunlik <b>bepul dasturdan</b> muvaffaqiyatli o‘tdingiz!\n\n"
-            "👉 Endi <b>premium bosqichni</b> davom ettirish uchun to‘lov qilishingiz kerak.\n\n"
+            "🎉 Siz dasturga boshlayapsiz, endi <b>premium bosqich uchun</b> to‘lov qilishingiz kerak!\n\n"
             "✅ Natijada:\n"
             "▫️ 30 kunda <b>-16 kg</b>\n"
             "▫️ 40 kunda <b>-19 kg</b>\n\n"
@@ -183,6 +183,7 @@ def get_payment_text(weight, day):
             "❓ Savollar bo‘lsa, pastdagi <b>“💬 Murojaat qilish”</b> tugmasini bosing."
         )
     return ""
+
 
 def build_days_keyboard(weight, current_day, extra_buttons: list = None):
     """
@@ -417,9 +418,8 @@ async def show_day(callback: CallbackQuery):
         await callback.answer("⛔ Bu kun hali ochilmagan!", show_alert=True)
         return
 
-    # only 4-kun requires payment in this design
-    if day == 4 and 4 not in user.get("paid_days", []):
-        # show payment text with promo button appended
+    # ✅ TO‘G‘RI: 1-kun uchun to‘lov
+    if day == 1 and 1 not in user.get("paid_days", []):
         markup = build_days_keyboard(weight, current_day, extra_buttons=[
             InlineKeyboardButton(text="🎁 Promokod bor", callback_data="promo")
         ])
@@ -429,10 +429,12 @@ async def show_day(callback: CallbackQuery):
     # read day content
     text = read_day_file(weight, day)
     text += "\n\n❓ Savollar bo‘lsa dietologga murojaat qiling 👇"
-    # if user saw current day, open next one (atomic via set_user_data lock)
+
+    # if user saw current day, open next one
     if day == current_day and current_day < total_days:
         user["day"] = current_day + 1
         await set_user_data(user_id, user)
+
     await callback.message.edit_text(text, reply_markup=build_days_keyboard(weight, user["day"]))
 
 @router.callback_query(F.data == "locked")
@@ -495,9 +497,9 @@ async def handle_payment_photo(message: Message):
     if not user:
         return
     day = user.get("day", 1)
-    # only stage 4 requires payment in current design
-    if day == 4:
-        stage = 4
+    # only stage 1 requires payment in current design
+    if day == 1:
+        stage = 1
     else:
         await message.answer("⛔ Sizda hozir to‘lov bosqichi yo‘q.")
         return
@@ -548,20 +550,21 @@ async def confirm_payment_token(message: Message):
         await message.answer("❗ Foydalanuvchi topilmadi.")
         return
 
-    if stage == 4 and user.get('day', 1) < 4:
-        user['day'] = 4
+    # ✅ TO‘G‘RI: 1-kun uchun payment
+    if stage == 1 and 1 not in user.get('paid_days', []):
+        user['day'] = 1
+        user.setdefault("paid_days", []).append(stage)
+        # clear promo fields after confirmation
+        user.pop('discounted_price', None)
+        user.pop('promo_code', None)
+        await set_user_data(user_id, user)
 
-    user.setdefault("paid_days", []).append(stage)
-    # clear promo fields after confirmation to avoid reuse
-    user.pop('discounted_price', None)
-    user.pop('promo_code', None)
-    await set_user_data(user_id, user)
+        try:
+            await bot.send_message(chat_id=user_id, text=f"✅ To‘lov tasdiqlandi! {stage}-kun ochildi.")
+        except Exception as e:
+            logging.exception("Failed to notify user about payment confirmation: %s", e)
 
-    try:
-        await bot.send_message(chat_id=user_id, text=f"✅ To‘lov tasdiqlandi! {stage}-kun ochildi.")
-    except Exception as e:
-        logging.exception("Failed to notify user about payment confirmation: %s", e)
-    await message.answer(f"☑️ {user.get('name','')} uchun {stage}-kun ochildi.")
+        await message.answer(f"☑️ {user.get('name','')} uchun {stage}-kun ochildi.")
 
 # ---------- Admin menu ----------
 @router.message(Command("admin"))
