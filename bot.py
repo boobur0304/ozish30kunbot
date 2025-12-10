@@ -250,8 +250,7 @@ async def start_handler(message: Message, state: FSMContext):
         "- Bu shunchaki bot emas, bu — dietolog va trenerlar tayyorlagan maxsus dastur.\n"
         "- Sizga 30 kunlik individual menyu, mashqlar va motivatsiya beriladi.\n"
         "- Natijada: 30 kunda -16 kg, 40 kunda -19 kg.\n\n"
-        "✅ <b>Birinchi 3 kun — mutlaqo bepul!</b>\n"
-        "4-kundan boshlab premium ishtirokchilar davom ettirishlari mumkin.\n\n"
+        
         f"🎁 Chegirma olish uchun promokod faqat Instagram kanalimizda tarqatiladi —\n"
         f"👉 <a href=\"{INSTAGRAM_URL}\">Instagramga o‘tish</a>\n\n"
         "Ismingizni kiriting:",
