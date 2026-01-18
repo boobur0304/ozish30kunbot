@@ -150,9 +150,9 @@ async def age(message: Message, state: FSMContext):
     await message.answer("Vazningizni kiriting:")
     await state.set_state(Form.weight)
 
-@router.message(Form.weight)
+@router.message(Form.weight, F.text)
 async def weight(message: Message, state: FSMContext):
-    if not message.text or not message.text.isdigit():
+    if not message.text.isdigit():
         await message.answer(
             "⚠️ Iltimos, vazningizni faqat raqam bilan kiriting.\n"
             "Masalan: 75"
@@ -173,7 +173,6 @@ async def weight(message: Message, state: FSMContext):
 
     set_user(message.from_user.id, user)
 
-    # ADMIN GA XABAR
     await bot.send_message(
         ADMIN_ID,
         f"🆕 Yangi foydalanuvchi\n"
@@ -182,7 +181,6 @@ async def weight(message: Message, state: FSMContext):
         f"🆔 {message.from_user.id}"
     )
 
-    # FOYDALANUVCHIGA ANIQLIK
     await message.answer(
         "✅ Siz ro‘yxatdan muvaffaqiyatli o‘tdingiz!\n\n"
         "📅 Boshlash uchun <b>Bugungi kun</b> tugmasini bosing 👇",
@@ -190,6 +188,7 @@ async def weight(message: Message, state: FSMContext):
     )
 
     await state.clear()
+
 
 # ---------------- DAYS ----------------
 @router.message(F.text == "📅 Bugungi kun")
