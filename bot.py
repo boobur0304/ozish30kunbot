@@ -30,7 +30,10 @@ load_dotenv()
 
 # ---------------- CONFIG ----------------
 API_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
+
+# ADMIN ID (to‘g‘ridan-to‘g‘ri yozilgan)
+ADMIN_ID = 983517327
+
 # Karta raqami (to‘g‘ridan-to‘g‘ri yozilgan)
 CARD_NUMBER = "9860 3501 1046 1737"
 
