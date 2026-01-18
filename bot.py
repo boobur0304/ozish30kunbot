@@ -1,639 +1,288 @@
-# improved_bot_fixed.py
+# ================================
+# FINAL BOT — OZISH 30 KUNLIK
+# Model: 1-kun pullik, 2-kun upsell, 4-kun aqlli blok
+# Support: savol → admin → reply orqali javob
+# Aiogram v3
+# ================================
+
 import logging
 import json
 import os
 import uuid
 import asyncio
-from datetime import datetime, timedelta
-import pytz
 
-from aiogram import Bot, Dispatcher, types, F
+from aiogram import Bot, Dispatcher, F
+from aiogram.types import (
+    Message, CallbackQuery,
+    ReplyKeyboardMarkup, KeyboardButton,
+    InlineKeyboardMarkup, InlineKeyboardButton
+)
+from aiogram.filters import CommandStart, Command
+from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart, Command
-from aiogram.fsm.state import State, StatesGroup
-from aiogram import Router
+from aiogram.fsm.state import StatesGroup, State
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import Message, CallbackQuery
-
+from aiogram import Router
 from dotenv import load_dotenv
+
 load_dotenv()
 
-# ---------- Config ----------
+# ---------------- CONFIG ----------------
 API_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "983517327"))
-CARD_NUMBER = os.getenv("CARD_NUMBER", "9860350110461737")
-INSTAGRAM_URL = os.getenv("INSTAGRAM_URL", "https://www.instagram.com/ozish30kunbot")
-RESULT_CHANNEL_LINK = os.getenv("RESULT_CHANNEL_LINK", "https://t.me/ozishchatbot")
-OZISH_BOT = os.getenv("OZISH_BOT", "https://t.me/OzishChatBot")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
+# Karta raqami (to‘g‘ridan-to‘g‘ri yozilgan)
+CARD_NUMBER = "9860 3501 1046 1737"
 
-# which day requires payment
-PAYMENT_DAY = 1
+ENTRY_PRICE = 12000
+UPSELL_PRICE = 59000
+MAX_FREE_DAYS = 3
 
-logging.basicConfig(level=logging.INFO)
+# ---------------- INIT ----------------
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-# aiogram v3 dispatcher with in-memory state
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 router = Router()
 dp.include_router(router)
 
+logging.basicConfig(level=logging.INFO)
+
+# ---------------- FILES ----------------
 USERS_PATH = "database/users.json"
 TOKENS_PATH = "database/tokens.json"
-PROMOS_PATH = "database/promos.json"
 
 os.makedirs("database", exist_ok=True)
-# ensure files exist
-for p in (TOKENS_PATH, USERS_PATH, PROMOS_PATH):
+for p in (USERS_PATH, TOKENS_PATH):
     if not os.path.exists(p):
-        with open(p, 'w', encoding='utf-8') as f:
-            json.dump({}, f, ensure_ascii=False)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump({}, f)
 
-# Locks to protect file access inside the same process
-users_lock = asyncio.Lock()
-tokens_lock = asyncio.Lock()
-promos_lock = asyncio.Lock()
-
-# States
+# ---------------- STATES ----------------
 class Form(StatesGroup):
     name = State()
     surname = State()
     age = State()
     weight = State()
+    question = State()
 
-class PromoForm(StatesGroup):
-    code = State()
+# ---------------- HELPERS ----------------
+def load_json(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-# ---------- Safe file IO (async with locks) ----------
-async def load_users():
-    async with users_lock:
-        try:
-            with open(USERS_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            logging.warning("users.json JSONDecodeError — returning empty dict")
-            return {}
-        except Exception as e:
-            logging.exception("load_users error: %s", e)
-            return {}
+def save_json(path, data):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
-async def save_users(users):
-    async with users_lock:
-        try:
-            tmp = USERS_PATH + ".tmp"
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(users, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, USERS_PATH)
-        except Exception as e:
-            logging.exception("save_users error: %s", e)
+def get_user(user_id):
+    users = load_json(USERS_PATH)
+    return users.get(str(user_id))
 
-async def get_user_data(user_id):
-    users = await load_users()
-    user = users.get(str(user_id))
-    if user and "paid_days" not in user:
-        user["paid_days"] = []
-    return user
-
-async def set_user_data(user_id, data):
-    users = await load_users()
+def set_user(user_id, data):
+    users = load_json(USERS_PATH)
     users[str(user_id)] = data
-    await save_users(users)
+    save_json(USERS_PATH, users)
 
-async def load_tokens():
-    async with tokens_lock:
-        try:
-            with open(TOKENS_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            logging.warning("tokens.json JSONDecodeError — returning empty dict")
-            return {}
-        except Exception as e:
-            logging.exception("load_tokens error: %s", e)
-            return {}
-
-async def save_tokens(tokens):
-    async with tokens_lock:
-        try:
-            tmp = TOKENS_PATH + ".tmp"
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(tokens, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, TOKENS_PATH)
-        except Exception as e:
-            logging.exception("save_tokens error: %s", e)
-
-# promos (async)
-async def load_promos():
-    async with promos_lock:
-        try:
-            with open(PROMOS_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            logging.warning("promos.json JSONDecodeError — returning empty dict")
-            return {}
-        except Exception as e:
-            logging.exception("load_promos error: %s", e)
-            return {}
-
-async def save_promos(promos):
-    async with promos_lock:
-        try:
-            tmp = PROMOS_PATH + ".tmp"
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(promos, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, PROMOS_PATH)
-        except Exception as e:
-            logging.exception("save_promos error: %s", e)
-
-# ---------- Helpers ----------
-def mask_card(number: str) -> str:
-    s = number.replace(" ", "")
-    if len(s) >= 16:
-        return f"{s[:4]} {s[4:8]} **** {s[-4:]}"
-    return number
-
-def read_day_file(weight, day):
-    folder = "data/days_plus" if weight >= 100 else "data/days"
-    path = os.path.join(folder, f"day{day}.txt")
+def read_day(day):
+    path = f"data/day{day}.txt"
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
-    return "❌ Ushbu kun uchun ma'lumot topilmadi."
+    return "❌ Ushbu kun uchun ma'lumot topilmadi"
 
-def get_payment_text(weight, day):
-    # uses global PAYMENT_DAY
-    if day == PAYMENT_DAY:
-        return (
-            "🎉 Siz dasturga start berdingiz va dasturda ishtirok etish uchun to‘lov qilishingiz kerak!\n\n"
-            "✅ Natijada:\n"
-            "▫️ 30 kunda <b>-16 kg</b>\n"
-            "▫️ 40 kunda <b>-19 kg</b>\n\n"
-            f"💳 <b>To‘lov narxi:</b> <s>199,000 so‘m</s> ➝ <b>145,000 so‘m</b>\n"
-            "(kuniga ~4,800 so‘m, ya’ni bir choy narxi)\n\n"
-            f"💳 <b>Karta raqami:</b> <code>{CARD_NUMBER}</code>\n"
-            "👤 <b>Karta egasi:</b> <b>B.Nematov</b>\n\n"
-            "📸 <b>To‘lov chekini shu botga yuboring.</b>\n"
-            "⏱ <i>10 daqiqa ichida admin tasdiqlaydi</i> va keyingi kuningiz ochiladi!\n\n"
-            "⚡️ <b>Eslatma:</b> Agar bugun to‘lamasangiz, dastur <u>to‘xtab qoladi</u> "
-            "va natija <u>kechikadi</u>.\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n\n"
-            "✨ <b>Siz bu narxga yana chegirma olishingiz mumkin!</b>\n\n"
-            "📲 Buning uchun:\n"
-            "1️⃣ <b>Instagram sahifamizga o‘ting</b> va sahifaga obuna bo‘ling.\n"
-            "2️⃣ <b>Promokod oling</b> (sahifada e’lon qilinadi).\n"
-            "3️⃣ Botdagi <b>“🎁 Promokod bor”</b> tugmasini bosing va kodingizni kiriting.\n\n"
-            "✅ Shunda adminlar sizga chegirma qo‘llashadi.\n\n"
-            "❓ Savollar bo‘lsa, pastdagi <b>“💬 Murojaat qilish”</b> tugmasini bosing."
-        )
-    return ""
-
-
-def build_days_keyboard(weight, current_day, extra_buttons: list = None):
-    total_days = 40 if weight >= 100 else 30
-    rows = []
-
-    # Instagram button row
-    rows.append([
-        InlineKeyboardButton(text="🎁 Instagramdan PROMOKOD olish", url=INSTAGRAM_URL)
-    ])
-
-    day_buttons = []
-    for d in range(1, total_days + 1):
-        if d == current_day:
-            day_buttons.append(InlineKeyboardButton(text=f"💚 Kun {d}", callback_data=f"day_{d}"))
-        elif d < current_day:
-            day_buttons.append(InlineKeyboardButton(text=f"✅ Kun {d}", callback_data=f"day_{d}"))
-        else:
-            day_buttons.append(InlineKeyboardButton(text=f"🔒 Kun {d}", callback_data="locked"))
-
-    for i in range(0, len(day_buttons), 4):
-        rows.append(day_buttons[i:i+4])
-
-    if extra_buttons:
-        for btn in extra_buttons:
-            rows.append([btn])
-
-    rows.append([InlineKeyboardButton(text="💬 Murojaat qilish", url=OZISH_BOT)])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-# ---------- Daily reminders ----------
-async def send_daily_reminders():
-    tz = pytz.timezone("Asia/Tashkent")
-    while True:
-        now = datetime.now(tz)
-        send_time = now.replace(hour=7, minute=0, second=0, microsecond=0)
-        if now > send_time:
-            send_time += timedelta(days=1)
-        wait_seconds = (send_time - now).total_seconds()
-        await asyncio.sleep(wait_seconds)
-
-        users = await load_users()
-        for user_id, user in users.items():
-            try:
-                current_day = user.get("day", 1)
-                weight = user.get("weight", 0)
-                text = (
-                    f"☀️ <b>Xayrli tong, {user.get('name', '')}!</b>\n\n"
-                    f"🔥 Bugungi mashqlar va menyu tayyor.\n"
-                    f"👉 Pastdagi tugma orqali <b>{current_day}-kun</b> ni boshlang!"
-                )
-                await bot.send_message(chat_id=int(user_id), text=text, reply_markup=build_days_keyboard(weight, current_day))
-            except Exception as e:
-                logging.error(f"Eslatma yuborishda xato ({user_id}): {e}")
-
-# ---------- Handlers ----------
-@router.message(CommandStart())
-async def start_handler(message: Message, state: FSMContext):
-    await message.answer(
-        "🎯 <b>Marafon haqida:</b>\n"
-        "- Bu shunchaki bot emas, bu — dietolog va trenerlar tayyorlagan maxsus dastur.\n"
-        "- Sizga 30 kunlik individual menyu, mashqlar va motivatsiya beriladi.\n"
-        "- Natijada: 30 kunda -16 kg, 40 kunda -19 kg.\n\n"
-        
-        f"🎁 Chegirma olish uchun promokod faqat Instagram kanalimizda tarqatiladi —\n"
-        f"👉 <a href=\"{INSTAGRAM_URL}\">Instagramga o‘tish</a>\n\n"
-        "Ismingizni kiriting:",
-        parse_mode="HTML"
+# ---------------- KEYBOARDS ----------------
+def main_menu():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📅 Bugungi kun"), KeyboardButton(text="▶️ Keyingi kun")],
+            [KeyboardButton(text="📊 Natijam"), KeyboardButton(text="💬 Savol berish")]
+        ],
+        resize_keyboard=True
     )
+
+def upsell_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🔓 30 kunni ochish", callback_data="open_30")]]
+    )
+
+# ---------------- TEXTS ----------------
+START_TEXT = (
+    "Agar qorin va bel ketmayotgan bo‘lsa,\n"
+    "muammo sizda emas.\n\n"
+    "Bu 30 kunlik aniq tizim.\n"
+    "Ko‘pchilik 7–10 kundan keyin farqni sezadi.\n\n"
+    "Boshlash uchun minimal summa — 12 000 so‘m\n\n"
+    "Boshlash uchun ismingizni yozing 👇"
+)
+
+UPSELL_TEXT = (
+    "Agar shu yerga yetib kelgan bo‘lsang — sen boshlading.\n\n"
+    "Keyingi 28 kunda:\n"
+    "• qorin va bel ketadi\n"
+    "• ochlik kamayadi\n"
+    "• vazn barqaror tushadi\n\n"
+    f"🔥 30 kunlik davom ettirish — {UPSELL_PRICE:,} so‘m"
+)
+
+DAY4_BLOCKS = [
+    "🔒 4-kun hozircha yopiq. Asosiy natijalar endi boshlanadi.",
+    "ℹ️ Ko‘pchilik aynan shu joyda tashlab ketadi.",
+    "⏳ To‘xtasang — yana boshidan. Davom etsang — natija bo‘ladi."
+]
+
+# ---------------- START ----------------
+@router.message(CommandStart())
+async def start(message: Message, state: FSMContext):
+    await message.answer(START_TEXT)
     await state.set_state(Form.name)
 
-
 @router.message(Form.name)
-async def get_name(message: Message, state: FSMContext):
-    txt = message.text.strip()
-    if len(txt) < 2:
-        await message.answer("⚠️ Ism juda qisqa. Iltimos, to‘liq ismingizni yozing.")
-        return
-    await state.update_data(name=txt)
+async def name(message: Message, state: FSMContext):
+    await state.update_data(name=message.text)
     await message.answer("Familiyangizni kiriting:")
     await state.set_state(Form.surname)
 
-
 @router.message(Form.surname)
-async def get_surname(message: Message, state: FSMContext):
-    txt = message.text.strip()
-    if len(txt) < 2:
-        await message.answer("⚠️ Familiya juda qisqa. Iltimos, to‘liq familiyangizni yozing.")
-        return
-    await state.update_data(surname=txt)
-    await message.answer("Yoshingizni kiriting (faqat raqam, masalan: 25):")
+async def surname(message: Message, state: FSMContext):
+    await state.update_data(surname=message.text)
+    await message.answer("Yoshingizni kiriting:")
     await state.set_state(Form.age)
 
-
 @router.message(Form.age)
-async def get_age(message: Message, state: FSMContext):
-    if not message.text.isdigit():
-        await message.answer("⚠️ Yosh faqat raqam bo‘lishi kerak (masalan: 25).")
-        return
-    age = int(message.text)
-    if age < 10 or age > 100:
-        await message.answer("⚠️ Yosh 10 va 100 orasida bo‘lishi kerak.")
-        return
-    await state.update_data(age=age)
-    await message.answer("Vazningizni kiriting (kg, masalan: 78):")
+async def age(message: Message, state: FSMContext):
+    await state.update_data(age=message.text)
+    await message.answer("Vazningizni kiriting:")
     await state.set_state(Form.weight)
 
-
 @router.message(Form.weight)
-async def get_weight(message: Message, state: FSMContext):
-    user_id = message.from_user.id
+async def weight(message: Message, state: FSMContext):
     data = await state.get_data()
-
-    if not message.text.isdigit():
-        await message.answer("⚠️ Vazn faqat raqam bo‘lishi kerak (masalan: 78).")
-        return
-
-    weight = int(message.text)
-    if weight < 30 or weight > 300:
-        await message.answer("⚠️ Vazn 30 dan 300 kg orasida bo‘lishi kerak.")
-        return
-
-    user_data = {
-        "name": data['name'],
-        "surname": data['surname'],
-        "age": data['age'],
-        "weight": weight,
+    user = {
+        **data,
+        "weight": message.text,
         "day": 1,
-        "paid_days": []
+        "paid_entry": False,
+        "paid_full": False,
+        "upsell_shown": False,
+        "day4_attempts": 0
     }
-    await set_user_data(user_id, user_data)
-
-    # Admin notification
-    admin_text = (
-        f"🆕 Yangi foydalanuvchi!\n\n"
-        f"👤 Ism: {user_data['name']}\n"
-        f"👤 Familiya: {user_data['surname']}\n"
-        f"🎂 Yosh: {user_data['age']} da\n"
-        f"⚖️ Vazn: {user_data['weight']} kg"
-    )
-    try:
-        await bot.send_message(ADMIN_ID, admin_text)
-    except Exception as e:
-        logging.exception("Failed to send admin notification: %s", e)
-
-    days_keyboard = build_days_keyboard(weight, 1)
-
-    user_text = (
-        f"✅ <b>Ma’lumotlaringiz qabul qilindi!</b>\n\n"
-        f"👤 Ism: <b>{user_data['name']}</b>\n"
-        f"👤 Familiya: <b>{user_data['surname']}</b>\n"
-        f"🎂 Yosh: <b>{user_data['age']} da</b>\n"
-        f"⚖️ Vazn: <b>{user_data['weight']} kg</b>\n\n"
-        "▶️ Pastdan <b>1-kun</b> tugmasini bosing va boshlang 👇"
-    )
-
-    await message.answer(user_text, reply_markup=days_keyboard)
+    set_user(message.from_user.id, user)
+    await message.answer("Boshladik!", reply_markup=main_menu())
     await state.clear()
 
+# ---------------- DAYS ----------------
+@router.message(F.text == "📅 Bugungi kun")
+async def today(message: Message):
+    user = get_user(message.from_user.id)
+    day = user["day"]
 
-@router.callback_query(F.data.startswith("day_"))
-async def show_day(callback: CallbackQuery):
-    user_id = callback.from_user.id
-    user = await get_user_data(user_id)
-    if not user:
-        await callback.message.answer("❗ Iltimos, /start tugmasini bosing.")
+    if day == 1 and not user.get("paid_entry"):
+        await message.answer(
+            f"🔒 1-kun yopiq\n\n"
+            f"Boshlash uchun minimal summa: {ENTRY_PRICE:,} so‘m\n"
+            f"Karta: {CARD_NUMBER}\n\n"
+            "📸 Chekni rasm qilib botga yuboring"
+        )
         return
 
-    day = int(callback.data.split("_")[1])
-    weight = user.get("weight", 0)
-    current_day = user.get("day", 1)
-    total_days = 40 if weight >= 100 else 30
-
-    if day > current_day:
-        await callback.answer("⛔ Bu kun hali ochilmagan!", show_alert=True)
+    if day > MAX_FREE_DAYS and not user.get("paid_full"):
+        idx = min(user["day4_attempts"], 2)
+        user["day4_attempts"] += 1
+        set_user(message.from_user.id, user)
+        await message.answer(DAY4_BLOCKS[idx], reply_markup=upsell_keyboard())
         return
 
-    # PAYMENT_DAY global used inside get_payment_text
-    if day == PAYMENT_DAY and PAYMENT_DAY not in user.get("paid_days", []):
-        markup = build_days_keyboard(weight, current_day, extra_buttons=[
-            InlineKeyboardButton(text="🎁 Promokod bor", callback_data="promo")
-        ])
-        await callback.message.edit_text(get_payment_text(weight, day), reply_markup=markup)
-        return
+    text = read_day(day)
+    await message.answer(text, reply_markup=main_menu())
 
-    # read day content and possibly open next day
-    text = read_day_file(weight, day)
-    text += "\n\n❓ Savollar bo‘lsa dietologga murojaat qiling 👇"
+    if day == 2 and not user.get("upsell_shown"):
+        user["upsell_shown"] = True
+        set_user(message.from_user.id, user)
+        await message.answer(UPSELL_TEXT, reply_markup=upsell_keyboard())
 
-    if day == current_day and current_day < total_days:
-        user["day"] = current_day + 1
-        await set_user_data(user_id, user)
+@router.message(F.text == "▶️ Keyingi kun")
+async def next_day(message: Message):
+    user = get_user(message.from_user.id)
+    user["day"] += 1
+    set_user(message.from_user.id, user)
+    await today(message)
 
-    await callback.message.edit_text(text, reply_markup=build_days_keyboard(weight, user["day"]))
-
-
-@router.callback_query(F.data == "locked")
-async def locked_day(callback: CallbackQuery):
-    await callback.answer("⛔ Bu kun hali ochilmagan!", show_alert=True)
-
-
-@router.callback_query(F.data == "promo")
-async def ask_promo(callback: CallbackQuery, state: FSMContext):
-    await callback.message.answer("🎁 Iltimos, promokodingizni kiriting (masalan: PROMO30):")
-    await state.set_state(PromoForm.code)
-
-
-@router.message(PromoForm.code)
-async def check_promo(message: Message, state: FSMContext):
-    code = message.text.strip().upper()
-    promos = await load_promos()
-    if code not in promos:
-        await message.answer("❌ Noto‘g‘ri promokod yoki u bekor qilingan.")
-        await state.clear()
-        return
-
-    value = promos[code]
-    if isinstance(value, int):
-        narx = value
-    elif isinstance(value, str) and value.endswith("%"):
-        percent = int(value[:-1])
-        base = 145000
-        narx = int(base * (100 - percent) / 100)
+@router.message(F.text == "📊 Natijam")
+async def result(message: Message):
+    user = get_user(message.from_user.id)
+    d = user["day"]
+    if d <= 2:
+        text = "Tanangiz moslashmoqda."
+    elif d <= 5:
+        text = "Birinchi o‘zgarishlar boshlandi."
     else:
-        narx = 145000
+        text = "Natija mustahkamlanmoqda."
+    await message.answer(text)
 
-    user_id = message.from_user.id
-    user = await get_user_data(user_id)
-    if not user:
-        await message.answer("❗ Foydalanuvchi topilmadi. /start orqali qayta ro‘yxatdan o‘ting.")
-        await state.clear()
-        return
+# ---------------- SUPPORT ----------------
+@router.message(F.text == "💬 Savol berish")
+async def ask(message: Message, state: FSMContext):
+    await message.answer("Savolingizni yozing:")
+    await state.set_state(Form.question)
 
-    user['promo_code'] = code
-    user['discounted_price'] = narx
-    await set_user_data(user_id, user)
-
-    await message.answer(
-        f"✅ Promokod qabul qilindi: <b>{code}</b>\n"
-        f"💳 Sizning chegirmali narxingiz: <b>{narx:,} so‘m</b>\n\n"
-        "Iltimos, to‘lov qilganingizdan so‘ng chekni shu botga rasm qilib yuboring."
+@router.message(Form.question)
+async def handle_question(message: Message, state: FSMContext):
+    user = get_user(message.from_user.id)
+    text = (
+        f"❓ Yangi savol\n"
+        f"👤 {user['name']} {user['surname']}\n"
+        f"🆔 ID: {message.from_user.id}\n\n"
+        f"✍️ {message.text}\n\n"
+        "↩️ Javob berish uchun reply qiling"
     )
+    await bot.send_message(ADMIN_ID, text)
+    await message.answer("✅ Savolingiz yuborildi")
     await state.clear()
 
+@router.message(F.reply_to_message)
+async def admin_reply(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    if "🆔 ID:" in message.reply_to_message.text:
+        uid = int(message.reply_to_message.text.split("🆔 ID:")[1].split()[0])
+        await bot.send_message(uid, f"💬 Admin javobi:\n\n{message.text}")
 
+# ---------------- PAYMENTS ----------------
 @router.message(F.photo)
-async def handle_payment_photo(message: Message):
-    user_id = message.from_user.id
-    photo_id = message.photo[-1].file_id
-    if user_id == ADMIN_ID:
-        return
-    user = await get_user_data(user_id)
-    if not user:
-        return
+async def payment(message: Message):
+    user = get_user(message.from_user.id)
+    token = f"PAY-{uuid.uuid4().hex[:6]}"
+    tokens = load_json(TOKENS_PATH)
+    tokens[token] = message.from_user.id
+    save_json(TOKENS_PATH, tokens)
 
-    day = user.get('day', 1)
-    if day != PAYMENT_DAY:
-        await message.answer("⛔ Sizda hozir to‘lov bosqichi yo‘q.")
-        return
-
-    stage = PAYMENT_DAY
-    token = f"KUN{stage}-{uuid.uuid4().hex[:6]}"
-    tokens = await load_tokens()
-    price = user.get('discounted_price', 145000)
-    promo = user.get('promo_code')
-    tokens[token] = {"user_id": user_id, "stage": stage, "price": price, "promo": promo}
-    await save_tokens(tokens)
-
-    caption = (
-        f"💳 <b>Yangi to‘lov cheki</b>\n"
-        f"ID: <code>{user_id}</code>\n"
-        f"Ism: <b>{user.get('name','')} {user.get('surname','')}</b>\n"
-        f"Narx: <b>{price:,} so'm</b>\n"
+    await bot.send_photo(
+        ADMIN_ID,
+        message.photo[-1].file_id,
+        caption=f"To‘lov cheki\nID: {message.from_user.id}\nToken: {token}"
     )
-    if promo:
-        caption += f"Promokod: <b>{promo}</b>\n"
-    caption += f"\n✅ <b>Tasdiqlash kodi:</b> <code>{token}</code>"
+    await message.answer("Chek yuborildi. Tasdiqlanishini kuting")
 
-    try:
-        await bot.send_photo(chat_id=ADMIN_ID, photo=photo_id, caption=caption, parse_mode="HTML")
-    except Exception as e:
-        logging.exception("Failed to forward payment photo to admin: %s", e)
-
-    await message.answer("✅ Chekingiz yuborildi. Admin ko‘rib chiqadi.")
-
-
-@router.message(F.text.startswith("KUN"))
-async def confirm_payment_token(message: Message):
+@router.message(F.text.startswith("PAY-"))
+async def confirm(message: Message):
     if message.from_user.id != ADMIN_ID:
         return
-
-    token = message.text.strip()
-    tokens = await load_tokens()
-    if token not in tokens:
-        await message.answer("❌ Noto‘g‘ri yoki eskirgan token.")
+    tokens = load_json(TOKENS_PATH)
+    uid = tokens.pop(message.text, None)
+    save_json(TOKENS_PATH, tokens)
+    if not uid:
         return
-
-    user_id = tokens[token]['user_id']
-    stage = tokens[token]['stage']
-    price = tokens[token].get('price')
-    promo = tokens[token].get('promo')
-
-    del tokens[token]
-    await save_tokens(tokens)
-
-    user = await get_user_data(user_id)
-    if not user:
-        await message.answer("❗ Foydalanuvchi topilmadi.")
-        return
-
-    # ensure day at least 1 when confirming day-1 payment
-    if stage == 1 and user.get('day', 1) < 1:
-        user['day'] = 1
-
-    user.setdefault("paid_days", []).append(stage)
-    user.pop('discounted_price', None)
-    user.pop('promo_code', None)
-    await set_user_data(user_id, user)
-
-    try:
-        await bot.send_message(chat_id=user_id, text=f"✅ To‘lov tasdiqlandi! {stage}-kun ochildi.")
-    except Exception as e:
-        logging.exception("Failed to notify user about payment confirmation: %s", e)
-    await message.answer(f"☑️ {user.get('name','')} uchun {stage}-kun ochildi.")
-
-
-@router.message(Command("admin"))
-async def admin_menu(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Foydalanuvchilar haqida", callback_data="stats")],
-        [InlineKeyboardButton(text="📎  Savollarga javob berish", url=RESULT_CHANNEL_LINK)]
-    ])
-    await message.answer("🔧 Admin menyusi:", reply_markup=keyboard)
-
-
-@router.message(Command("addpromo"))
-async def add_promo(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-
-    args = message.text.split()
-    if len(args) != 3:
-        await message.answer("⚠️ Foydalanish: /addpromo KOD chegirma\n"
-                             "Masalan:\n"
-                             "/addpromo PROMO30 30 (foiz) yoki /addpromo START99 99000 (fiks narx)")
-        return
-
-    code = args[1].upper()
-    value = args[2]
-
-    promos = await load_promos()
-
-    if value.endswith("%"):
-        try:
-            percent = int(value[:-1])
-            promos[code] = f"{percent}%"
-        except Exception:
-            await message.answer("❌ Noto‘g‘ri foiz formati. Masalan: 30% yoki 30")
-            return
-    elif value.isdigit():
-        if len(value) >= 5:
-            promos[code] = int(value)
-        else:
-            promos[code] = f"{int(value)}%"
+    user = get_user(uid)
+    if not user.get("paid_entry"):
+        user["paid_entry"] = True
     else:
-        try:
-            percent = int(value)
-            promos[code] = f"{percent}%"
-        except Exception:
-            await message.answer("❌ Noto‘g‘ri qiymat.")
-            return
+        user["paid_full"] = True
+    set_user(uid, user)
+    await bot.send_message(uid, "✅ To‘lov tasdiqlandi")
 
-    await save_promos(promos)
-    await message.answer(f"✅ Promokod qo‘shildi: {code} → {promos[code]}")
-
-
-@router.message(Command("delpromo"))
-async def delete_promo(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-
-    args = message.text.split()
-    if len(args) != 2:
-        await message.answer("⚠️ Foydalanish: /delpromo PROMOKOD\nMasalan: /delpromo PROMO30")
-        return
-
-    code = args[1].upper()
-    promos = await load_promos()
-    if code not in promos:
-        await message.answer("❌ Bunday promokod topilmadi.")
-        return
-
-    promos.pop(code)
-    await save_promos(promos)
-    await message.answer(f"✅ Promokod o‘chirildi: {code}")
-
-
-@router.message(Command("sendall"))
-async def send_all(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-
-    args = message.text.split(" ", 1)
-    if len(args) < 2:
-        await message.answer("⚠️ Foydalanish: /sendall Xabar matni")
-        return
-
-    text = args[1]
-    users = await load_users()
-    count = 0
-    for user_id in users.keys():
-        try:
-            await bot.send_message(int(user_id), text)
-            count += 1
-        except Exception as e:
-            logging.warning(f"{user_id} ga yuborilmadi: {e}")
-
-    await message.answer(f"✅ Xabar {count} foydalanuvchiga yuborildi.")
-
-
-@router.callback_query(F.data == "stats")
-async def show_stats(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        return
-    users = await load_users()
-    total = len(users)
-    count_100_plus = sum(1 for u in users.values() if u.get('weight', 0) >= 100)
-    count_100_minus = total - count_100_plus
-    tolovchilar = sum(1 for u in users.values() if u.get("paid_days"))
-    await callback.message.edit_text(
-        f"📊 <b>Foydalanuvchilar statistikasi:</b>\n\n"
-        f"🔹 Jami: <b>{total}</b>\n"
-        f"⚖️ 100 kg dan kam: <b>{count_100_minus}</b>\n"
-        f"⚖️ 100 kg va undan ortiq: <b>{count_100_plus}</b>\n"
-        f"💰 To‘lov qilganlar: <b>{tolovchilar}</b>",
-        parse_mode="HTML"
-    )
-
-
+# ---------------- MAIN ----------------
 async def main():
-    # start background task
-    asyncio.create_task(send_daily_reminders())
-    # start polling
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
