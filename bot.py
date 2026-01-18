@@ -153,7 +153,10 @@ async def age(message: Message, state: FSMContext):
 @router.message(Form.weight)
 async def weight(message: Message, state: FSMContext):
     if not message.text or not message.text.isdigit():
-        await message.answer("⚠️ Iltimos, vazningizni faqat raqam bilan kiriting (masalan: 78)")
+        await message.answer(
+            "⚠️ Iltimos, vazningizni faqat raqam bilan kiriting.\n"
+            "Masalan: 75"
+        )
         return
 
     data = await state.get_data()
@@ -170,22 +173,23 @@ async def weight(message: Message, state: FSMContext):
 
     set_user(message.from_user.id, user)
 
+    # ADMIN GA XABAR
     await bot.send_message(
         ADMIN_ID,
         f"🆕 Yangi foydalanuvchi\n"
-        f"👤 {user.get('name','-')} {user.get('surname','-')}\n"
+        f"👤 {user['name']} {user['surname']}\n"
         f"⚖️ Vazn: {user['weight']} kg\n"
         f"🆔 {message.from_user.id}"
     )
 
+    # FOYDALANUVCHIGA ANIQLIK
     await message.answer(
-        "✅ Ma’lumotlaringiz qabul qilindi!\n\n"
-        "Boshlash uchun pastdagi tugmalardan foydalaning 👇",
+        "✅ Siz ro‘yxatdan muvaffaqiyatli o‘tdingiz!\n\n"
+        "📅 Boshlash uchun <b>Bugungi kun</b> tugmasini bosing 👇",
         reply_markup=main_menu()
     )
 
     await state.clear()
-
 
 # ---------------- DAYS ----------------
 @router.message(F.text == "📅 Bugungi kun")
