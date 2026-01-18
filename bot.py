@@ -104,9 +104,15 @@ def main_menu():
 def upsell_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton("🔓 30 kunni ochish", callback_data="open_30")]
+            [
+                InlineKeyboardButton(
+                    text="🔓 30 kunni ochish",
+                    callback_data="open_30"
+                )
+            ]
         ]
     )
+
 
 # ---------------- TEXTS ----------------
 START_TEXT = (
@@ -133,6 +139,38 @@ DAY4_BLOCKS = [
 ]
 
 # ---------------- START ----------------
+@router.message(CommandStart(), F.from_user.id == ADMIN_ID)
+async def admin_start(message: Message):
+    await message.answer(
+        "🔐 <b>Admin panel</b>\n\n"
+        "Quyidan bo‘lim tanlang 👇",
+        reply_markup=admin_menu()
+    )
+@router.callback_query(F.data == "admin_stats")
+async def admin_stats(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        return
+
+    users = load_json(USERS_PATH)
+
+    total_users = len(users)
+    day2_users = sum(1 for u in users.values() if u.get("day", 0) >= 2)
+    day3_users = sum(1 for u in users.values() if u.get("day", 0) >= 3)
+    paid_entry = sum(1 for u in users.values() if u.get("paid_entry"))
+    paid_full = sum(1 for u in users.values() if u.get("paid_full"))
+
+    text = (
+        "📊 <b>BOT STATISTIKASI</b>\n\n"
+        f"👥 Jami foydalanuvchilar: <b>{total_users}</b>\n\n"
+        f"➡️ 2-kunga yetganlar: <b>{day2_users}</b>\n"
+        f"➡️ 3-kunga yetganlar: <b>{day3_users}</b>\n\n"
+        f"💰 1-kun to‘lov qilganlar: <b>{paid_entry}</b>\n"
+        f"🔥 30 kun FULL olganlar: <b>{paid_full}</b>\n\n"
+        "📈 <i>Statistika real vaqtda yangilanadi</i>"
+    )
+
+    await callback.message.edit_text(text, reply_markup=admin_menu())
+
 @router.message(CommandStart())
 async def start(message: Message, state: FSMContext):
     await message.answer(START_TEXT)
@@ -202,49 +240,55 @@ async def today(message: Message):
     user = get_user(message.from_user.id)
     day = user["day"]
 
+    # 🔒 1-KUN — ENTRY to‘lovsiz yopiq
     if day == 1 and not user["paid_entry"]:
         await message.answer(
             "🔒 <b>1-KUN HOZIRCHA YOPIQ</b>\n\n"
             "Bu bosqichdan o‘tish uchun kichik start to‘lovi mavjud 👇\n\n"
             f"💰 <b>Boshlash narxi:</b> {ENTRY_PRICE:,} so‘m\n"
-            f"💳 <b>Karta raqami:</b> <code>{CARD_NUMBER}</code>\n"
+            f"💳 <b>Karta:</b> <code>{CARD_NUMBER}</code>\n"
             "👤 <b>Karta egasi:</b> B. Ne’matov\n\n"
             "📸 <b>To‘lovni amalga oshirib,</b>\n"
             "chekni shu yerga rasm qilib yuboring.\n\n"
-            "✅ <i>Tasdiqlangach, 1-kun darhol ochiladi</i>\n"
-            "va siz dasturga rasman start berasiz 💚"
+            "✅ <i>Tasdiqlangach, 1-kun darhol ochiladi</i>"
         )
         return
 
+    # ✅ 2-KUN — ochiq + yumshoq UPSELL
+    if day == 2 and not user["paid_full"]:
+        await message.answer(read_day(day), reply_markup=main_menu())
 
-    if day > MAX_FREE_DAYS and not user["paid_full"]:
-        idx = min(user["day4_attempts"], 2)
-        user["day4_attempts"] += 1
-        set_user(message.from_user.id, user)
-        await message.answer(DAY4_BLOCKS[idx], reply_markup=upsell_keyboard())
+        if not user.get("upsell_shown"):
+            user["upsell_shown"] = True
+            set_user(message.from_user.id, user)
+
+            await message.answer(
+                "⚠️ <b>2-KUN — MUHIM ESLATMA</b>\n\n"
+                "Tanangiz moslashishni boshladi.\n"
+                "Asosiy yog‘ ketish jarayoni 4-kundan boshlanadi.\n\n"
+                "💡 Ko‘pchilik aynan shu joyda to‘xtab qoladi.\n\n"
+                f"🔥 30 kunlik to‘liq dastur — {UPSELL_PRICE:,} so‘m\n"
+                "👇 Davom etish uchun hozir ochib qo‘ying",
+                reply_markup=upsell_keyboard()
+            )
         return
 
-    await message.answer(read_day(day), reply_markup=main_menu())
+    # ⚠️ 3-KUN — OXIRGI BEPUL KUN (KUCHLI BOSIM)
+    if day == 3 and not user["paid_full"]:
+        await message.answer(read_day(day), reply_markup=main_menu())
 
-    if day == 2 and not user["upsell_shown"]:
-        user["upsell_shown"] = True
-        set_user(message.from_user.id, user)
-        await message.answer(UPSELL_TEXT, reply_markup=upsell_keyboard())
-
-@router.message(F.text == "▶️ Keyingi kun")
-async def next_day(message: Message):
-    user = get_user(message.from_user.id)
-    day = user["day"]
-
-    # 🔒 1-kun pullik — to‘lovsiz o‘tolmaydi
-    if day == 1 and not user["paid_entry"]:
         await message.answer(
-            "🔒 <b>1-kun yopiq</b>\n\n"
-            "Boshlash uchun avval to‘lov qiling 👇"
+            "⚠️ <b>3-KUN — OXIRGI BEPUL KUN</b>\n\n"
+            "Bugundan keyin dastur yopiladi.\n\n"
+            "⏳ Agar hozir to‘xtasangiz — yana boshidan boshlaysiz.\n"
+            "🔥 Davom etsangiz — natija boshlanadi.\n\n"
+            f"💎 30 kunlik to‘liq dastur — {UPSELL_PRICE:,} so‘m\n"
+            "👇 Oxirgi imkoniyat — hozir oching",
+            reply_markup=upsell_keyboard()
         )
         return
 
-    # 🔒 4-kundan boshlab FULL to‘lovsiz o‘tolmaydi
+    # 🔒 4-KUNDAN BOSHLAB — FULLsiz yopiq
     if day > MAX_FREE_DAYS and not user["paid_full"]:
         idx = min(user["day4_attempts"], 2)
         user["day4_attempts"] += 1
@@ -255,6 +299,41 @@ async def next_day(message: Message):
             reply_markup=upsell_keyboard()
         )
         return
+
+    # ✅ FULL foydalanuvchilar uchun oddiy kunlar
+    await message.answer(read_day(day), reply_markup=main_menu())
+
+
+@router.message(F.text == "▶️ Keyingi kun")
+async def next_day(message: Message):
+    user = get_user(message.from_user.id)
+    day = user["day"]
+
+    # ❌ 1-kun: ENTRY to‘lovsiz o‘tmaydi
+    if day == 1 and not user["paid_entry"]:
+        await message.answer(
+            "🔒 <b>1-kun yopiq</b>\n\n"
+            "Davom etish uchun avval boshlash to‘lovini qiling 👇"
+        )
+        return
+
+    # ❌ 4-kundan boshlab: FULLsiz o‘tmaydi
+    if day >= MAX_FREE_DAYS and not user["paid_full"]:
+        await message.answer(
+            "🔒 Keyingi kunlar yopiq.\n\n"
+            "30 kunlik dasturga o‘ting 👇",
+            reply_markup=upsell_keyboard()
+        )
+        return
+
+    # ✅ Hamma shart bajarildi — kunga o‘tamiz
+    if day < TOTAL_DAYS:
+        user["day"] += 1
+        set_user(message.from_user.id, user)
+
+    # 🔁 Har doim yangi kunni ko‘rsatamiz
+    await today(message)
+
 
     # ✅ Hammasi joyida — keyingi kunga o‘tamiz
     if day < TOTAL_DAYS:
