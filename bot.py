@@ -1,8 +1,7 @@
 # ================================
-# FINAL BOT — OZISH 30 KUNLIK (YAKUNIY)
+# FINAL BOT — OZISH 30 KUNLIK (STABLE)
 # 1-kun pullik, 2-kun upsell, 4-kun aqlli blok
-# Start + Natijam + Upsell + 4-kun blok integratsiya qilingan
-# Support: savol → admin → reply orqali javob
+# Admin xabarlari + Natijam kengaytirilgan
 # Aiogram v3
 # ================================
 
@@ -103,30 +102,25 @@ def upsell_keyboard():
 
 # ---------------- TEXTS ----------------
 START_TEXT = (
-    "🥗 Agar qorin va bel ketmayotgan bo‘lsa,\n"
-    "bu sizning aybingiz emas.\n\n"
-    "Muammo ko‘pincha noto‘g‘ri ovqatlanish va tartibsiz rejimda bo‘ladi.\n\n"
-    "✨ Bu esa 30 kunlik aniq tizim.\n"
-    "Ko‘pchilik 7–10 kunda farqni sezadi.\n\n"
+    "🥗 Agar qorin va bel ketmayotgan bo‘lsa, bu sizning aybingiz emas.\n\n"
+    "Bu — 30 kunlik aniq tizim. Ko‘pchilik 7–10 kunda farqni sezadi.\n\n"
     "💰 Boshlash uchun minimal summa — 12 000 so‘m\n\n"
     "👇 Boshlash uchun ismingizni yozing"
 )
 
 UPSELL_TEXT = (
-    "🌱 Agar shu joygacha kelgan bo‘lsang — demak, sen boshlading.\n\n"
-    "Oxirgi 2 kun ichida tanang moslashdi.\n"
-    "Endi asosiy jarayon boshlanadi.\n\n"
+    "🌱 Siz allaqachon boshladingiz.\n\n"
     "Keyingi 28 kunda:\n"
-    "• qorin va bel sekin-asta ketadi\n"
-    "• ochlik kamayadi\n"
+    "• qorin va bel sekin kamayadi\n"
+    "• ochlik pasayadi\n"
     "• vazn barqaror tushadi\n\n"
     f"🔥 30 kunlik to‘liq dastur — {UPSELL_PRICE:,} so‘m"
 )
 
 DAY4_BLOCKS = [
-    "🔒 4-KUN HOZIRCHA YOPIQ\n\nSen 3 kunni ortda qoldirding. Asosiy o‘zgarishlar endi boshlanadi.",
-    "ℹ️ MUHIM ESLATMA\n\nKo‘pchilik 5–7-kunlarda aniq farqni sezadi. Faqat davom etganlar natija ko‘radi.",
-    "⏳ HAL QILUVCHI NUQTA\n\nBu safar oxirigacha boradiganlar natija oladi. Tanlov seniki."
+    "🔒 4-kun yopiq. Asosiy o‘zgarishlar aynan shu yerdan boshlanadi.",
+    "ℹ️ Ko‘pchilik 5–7-kunlarda aniq farqni sezadi.",
+    "⏳ Bu safar oxirigacha boradiganlar natija oladi."
 ]
 
 # ---------------- START ----------------
@@ -166,6 +160,12 @@ async def weight(message: Message, state: FSMContext):
         "day4_attempts": 0
     }
     set_user(message.from_user.id, user)
+
+    await bot.send_message(
+        ADMIN_ID,
+        f"🆕 Yangi foydalanuvchi\n👤 {user.get('name','-')} {user.get('surname','-')}\n🆔 {message.from_user.id}"
+    )
+
     await message.answer("Boshladik!", reply_markup=main_menu())
     await state.clear()
 
@@ -177,8 +177,7 @@ async def today(message: Message):
 
     if day == 1 and not user.get("paid_entry"):
         await message.answer(
-            f"🔒 1-kun yopiq\n\nBoshlash uchun minimal summa: {ENTRY_PRICE:,} so‘m\n"
-            f"💳 Karta: {CARD_NUMBER}\n\n📸 Chekni rasm qilib botga yuboring"
+            f"🔒 1-kun yopiq\n\nBoshlash: {ENTRY_PRICE:,} so‘m\n💳 {CARD_NUMBER}\n\n📸 Chekni yuboring"
         )
         return
 
@@ -199,20 +198,23 @@ async def today(message: Message):
 @router.message(F.text == "▶️ Keyingi kun")
 async def next_day(message: Message):
     user = get_user(message.from_user.id)
-    user["day"] += 1
-    set_user(message.from_user.id, user)
+    if user["day"] < 30:
+        user["day"] += 1
+        set_user(message.from_user.id, user)
     await today(message)
 
 @router.message(F.text == "📊 Natijam")
 async def result(message: Message):
     user = get_user(message.from_user.id)
     d = user["day"]
+
     if d <= 2:
-        text = "🫧 Tanangiz moslashmoqda. Eng muhim narsa — davom etish."
+        text = "🫧 Tana moslashmoqda. Shish va ochlik pasayadi."
     elif d <= 5:
-        text = "✨ Birinchi yengillik sezila boshlaydi."
+        text = "✨ Birinchi yengillik va energiya sezila boshlaydi."
     else:
         text = "🔥 Natija mustahkamlanmoqda. Siz to‘g‘ri yo‘ldasiz."
+
     await message.answer(text)
 
 # ---------------- SUPPORT ----------------
@@ -226,7 +228,7 @@ async def handle_question(message: Message, state: FSMContext):
     user = get_user(message.from_user.id)
     await bot.send_message(
         ADMIN_ID,
-        f"❓ Savol\n👤 {user['name']} {user['surname']}\n🆔 {message.from_user.id}\n\n{message.text}"
+        f"❓ Savol\n👤 {user.get('name','-')} {user.get('surname','-')}\n🆔 {message.from_user.id}\n\n{message.text}"
     )
     await message.answer("✅ Savolingiz yuborildi")
     await state.clear()
@@ -242,6 +244,7 @@ async def admin_reply(message: Message):
 # ---------------- PAYMENTS ----------------
 @router.message(F.photo)
 async def payment(message: Message):
+    user = get_user(message.from_user.id)
     token = f"PAY-{uuid.uuid4().hex[:6]}"
     tokens = load_json(TOKENS_PATH)
     tokens[token] = message.from_user.id
@@ -250,26 +253,42 @@ async def payment(message: Message):
     await bot.send_photo(
         ADMIN_ID,
         message.photo[-1].file_id,
-        caption=f"To‘lov cheki\nID: {message.from_user.id}\nToken: {token}"
+        caption=(
+            "💳 Yangi chek\n"
+            f"👤 {user.get('name','-')} {user.get('surname','-')}\n"
+            f"🆔 {message.from_user.id}\n"
+            f"🔑 Token: {token}"
+        )
     )
-    await message.answer("Chek yuborildi. Tasdiqlanishini kuting")
+
+    await message.answer("Chekingiz yuborildi, admin tekshiradi")
 
 @router.message(F.text.startswith("PAY-"))
 async def confirm(message: Message):
     if message.from_user.id != ADMIN_ID:
         return
+
     tokens = load_json(TOKENS_PATH)
     uid = tokens.pop(message.text, None)
     save_json(TOKENS_PATH, tokens)
+
     if not uid:
+        await message.answer("❌ Token topilmadi")
         return
+
     user = get_user(uid)
+
     if not user.get("paid_entry"):
         user["paid_entry"] = True
+        note = "1-kun ochildi"
     else:
         user["paid_full"] = True
+        note = "30 kun ochildi"
+
     set_user(uid, user)
-    await bot.send_message(uid, "✅ To‘lov tasdiqlandi")
+
+    await bot.send_message(uid, f"✅ To‘lov tasdiqlandi. {note}")
+    await message.answer(f"☑️ Tasdiqlandi: {user.get('name','-')} {user.get('surname','-')}")
 
 # ---------------- MAIN ----------------
 async def main():
