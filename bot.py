@@ -236,24 +236,27 @@ async def next_day(message: Message):
     user = get_user(message.from_user.id)
     day = user["day"]
 
-    # ❌ 1-kun pullik — to‘lovsiz o‘tolmaydi
+    # 🔒 1-kun pullik — to‘lovsiz o‘tolmaydi
     if day == 1 and not user["paid_entry"]:
         await message.answer(
-            "🔒 1-kun yopiq.\n\n"
+            "🔒 <b>1-kun yopiq</b>\n\n"
             "Boshlash uchun avval to‘lov qiling 👇"
         )
         return
 
-    # ❌ 4-kundan keyin FULL to‘lovsiz o‘tolmaydi
-    if day >= MAX_FREE_DAYS and not user["paid_full"]:
+    # 🔒 4-kundan boshlab FULL to‘lovsiz o‘tolmaydi
+    if day > MAX_FREE_DAYS and not user["paid_full"]:
+        idx = min(user["day4_attempts"], 2)
+        user["day4_attempts"] += 1
+        set_user(message.from_user.id, user)
+
         await message.answer(
-            "🔒 Keyingi kunlar yopiq.\n\n"
-            "30 kunlik dasturga o‘ting 👇",
+            DAY4_BLOCKS[idx],
             reply_markup=upsell_keyboard()
         )
         return
 
-    # ✅ hamma shart o‘tildi — keyingi kunga o‘tamiz
+    # ✅ Hammasi joyida — keyingi kunga o‘tamiz
     if day < TOTAL_DAYS:
         user["day"] += 1
         set_user(message.from_user.id, user)
