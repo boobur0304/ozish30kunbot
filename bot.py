@@ -204,12 +204,18 @@ async def today(message: Message):
 
     if day == 1 and not user["paid_entry"]:
         await message.answer(
-            f"🔒 1-kun yopiq\n\n"
-            f"💰 {ENTRY_PRICE:,} so‘m\n"
-            f"💳 {CARD_NUMBER}\n\n"
-            "📸 Chekni yuboring"
+            "🔒 <b>1-KUN HOZIRCHA YOPIQ</b>\n\n"
+            "Bu bosqichdan o‘tish uchun kichik start to‘lovi mavjud 👇\n\n"
+            f"💰 <b>Boshlash narxi:</b> {ENTRY_PRICE:,} so‘m\n"
+            f"💳 <b>Karta raqami:</b> <code>{CARD_NUMBER}</code>\n"
+            "👤 <b>Karta egasi:</b> B. Ne’matov\n\n"
+            "📸 <b>To‘lovni amalga oshirib,</b>\n"
+            "chekni shu yerga rasm qilib yuboring.\n\n"
+            "✅ <i>Tasdiqlangach, 1-kun darhol ochiladi</i>\n"
+            "va siz dasturga rasman start berasiz 💚"
         )
         return
+
 
     if day > MAX_FREE_DAYS and not user["paid_full"]:
         idx = min(user["day4_attempts"], 2)
@@ -228,21 +234,79 @@ async def today(message: Message):
 @router.message(F.text == "▶️ Keyingi kun")
 async def next_day(message: Message):
     user = get_user(message.from_user.id)
-    if user["day"] < TOTAL_DAYS:
+    day = user["day"]
+
+    # ❌ 1-kun pullik — to‘lovsiz o‘tolmaydi
+    if day == 1 and not user["paid_entry"]:
+        await message.answer(
+            "🔒 1-kun yopiq.\n\n"
+            "Boshlash uchun avval to‘lov qiling 👇"
+        )
+        return
+
+    # ❌ 4-kundan keyin FULL to‘lovsiz o‘tolmaydi
+    if day >= MAX_FREE_DAYS and not user["paid_full"]:
+        await message.answer(
+            "🔒 Keyingi kunlar yopiq.\n\n"
+            "30 kunlik dasturga o‘ting 👇",
+            reply_markup=upsell_keyboard()
+        )
+        return
+
+    # ✅ hamma shart o‘tildi — keyingi kunga o‘tamiz
+    if day < TOTAL_DAYS:
         user["day"] += 1
         set_user(message.from_user.id, user)
+
     await today(message)
+
 
 @router.message(F.text == "📊 Natijam")
 async def result(message: Message):
-    d = get_user(message.from_user.id)["day"]
+    user = get_user(message.from_user.id)
+    d = user["day"]
+
     if d <= 2:
-        text = "🫧 Tana moslashmoqda. Shish va ochlik pasayadi."
+        text = (
+            "🫧 <b>1–2-kun: Moslashuv bosqichi</b>\n\n"
+            "Tanangiz yangi rejimga o‘rganmoqda.\n"
+            "▫️ Shishlar kamayadi\n"
+            "▫️ Ochlik sekin pasaya boshlaydi\n"
+            "▫️ Oshqozon yengillashadi\n\n"
+            "💚 Bu bosqich eng muhimidir — davom eting."
+        )
+
     elif d <= 5:
-        text = "✨ Birinchi yengillik va energiya sezila boshlaydi."
+        text = (
+            "✨ <b>3–5-kun: Birinchi o‘zgarishlar</b>\n\n"
+            "Ko‘pchilik aynan shu paytda farqni sezadi:\n"
+            "▫️ Qorin yengillashadi\n"
+            "▫️ Energiya ko‘payadi\n"
+            "▫️ Tana tezroq uyg‘onadi\n\n"
+            "🔥 Siz to‘g‘ri yo‘ldasiz."
+        )
+
+    elif d <= 10:
+        text = (
+            "🔥 <b>6–10-kun: Natija ko‘rina boshlaydi</b>\n\n"
+            "▫️ Bel va qorin ancha bo‘shaydi\n"
+            "▫️ Ishtaha nazoratga keladi\n"
+            "▫️ Tarozida farq ko‘rina boshlaydi\n\n"
+            "💪 Bu joydan qaytganlar kam bo‘ladi."
+        )
+
     else:
-        text = "🔥 Natija mustahkamlanmoqda. Siz to‘g‘ri yo‘ldasiz."
+        text = (
+            "🏆 <b>Barqaror natija bosqichi</b>\n\n"
+            "Siz tanani qayta sozlash jarayonidasiz:\n"
+            "▫️ Vazn izchil tushmoqda\n"
+            "▫️ Natija mustahkamlanmoqda\n"
+            "▫️ Eski odatlar o‘rnini yangi tizim egalladi\n\n"
+            "👏 Oxirigacha borganlar aynan shu yerdan chiqadi."
+        )
+
     await message.answer(text)
+
 
 # ---------------- SUPPORT ----------------
 @router.message(F.text == "💬 Savol berish")
@@ -308,7 +372,7 @@ async def payment(message: Message):
         )
     )
 
-    await message.answer("Chekingiz yuborildi, admin tekshiradi")
+    await message.answer("Chekingiz yuborildi, admin tomonidan tekshirilib tez orada qabul qilinadi")
 
 @router.message(F.text.startswith(("ENTRY-", "FULL-")))
 async def confirm(message: Message):
