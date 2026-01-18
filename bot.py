@@ -80,7 +80,7 @@ def set_user(uid, data):
     save_json(USERS_PATH, users)
 
 def read_day(day):
-    path = f"data/day{day}.txt"
+    path = f"data/days/day{day}.txt"
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
