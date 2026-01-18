@@ -89,8 +89,14 @@ def read_day(day):
 def main_menu():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton("📅 Bugungi kun"), KeyboardButton("▶️ Keyingi kun")],
-            [KeyboardButton("📊 Natijam"), KeyboardButton("💬 Savol berish")]
+            [
+                KeyboardButton(text="📅 Bugungi kun"),
+                KeyboardButton(text="▶️ Keyingi kun")
+            ],
+            [
+                KeyboardButton(text="📊 Natijam"),
+                KeyboardButton(text="💬 Savol berish")
+            ]
         ],
         resize_keyboard=True
     )
