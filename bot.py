@@ -233,6 +233,17 @@ async def weight(message: Message, state: FSMContext):
 
     await state.clear()
 
+@router.message(F.text == "/admin")
+async def admin_panel(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ Siz admin emassiz")
+        return
+
+    await message.answer(
+        "🔐 <b>Admin panel</b>\n\n"
+        "Quyidan bo‘lim tanlang 👇",
+        reply_markup=admin_menu()
+    )
 
 # ---------------- DAYS ----------------
 @router.message(F.text == "📅 Bugungi kun")
